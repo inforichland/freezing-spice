@@ -7,12 +7,38 @@ package common is
 
     -- pipeline registers between IF and ID stages
     type if_id_regs_t is record
-        ir  : word;  -- instruction register
-        npc : word;  -- PC pipeline register
+        ir  : word;                     -- instruction register
+        npc : word;                     -- PC pipeline register
     end record if_id_regs_t;
 
-    constant c_if_id_regs_reset : if_id_regs_t := (ir => (others => '0'),
+    -- pipeline registers between ID and EX stages
+    type id_ex_regs_t is record
+        a   : word;
+        b   : word;
+        npc : word;
+        ir  : word;
+        imm : word;
+    end record id_ex_regs_t;
+
+    -- pipeline registers between EX and MEM stages
+    type ex_mem_regs_t is record
+        lmd          : word;
+        branch_taken : std_logic;
+        npc          : word;
+        ir           : word;
+        b            : word;
+    end record ex_mem_regs_t;
+
+    -- constants
+    constant c_if_id_regs_reset : if_id_regs_t := (ir  => (others => '0'),
                                                    npc => (others => '0'));
+
+    constant c_id_ex_regs_reset : id_ex_regs_t := (a   => (others => '0'),
+                                                   b   => (others => '0'),
+                                                   npc => (others => '0'),
+                                                   ir  => (others => '0'),
+                                                   imm => (others => '0'));
+
 
     -- sign-extend a 16-bit vector to 32 bits
     function sign_extend (value : std_logic_vector(15 downto 0)) return word;
