@@ -3,6 +3,7 @@ use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
 
 use work.common.all;
+use work.decode_pkg.all;
 
 entity mips is
     generic (g_initial_pc : unsigned(31 downto 0) := (others => '0'));
@@ -34,9 +35,9 @@ architecture Behavioral of mips is
     signal next_pc : unsigned(31 downto 0);
 
     -- ID signals
-    signal id_imm             : word;
-    signal id_addra, id_addrb : std_logic_vector(4 downto 0);
-    signal id_rega, id_regb   : word;
+    signal id_decoded               : decoded_t := c_decoded_reset;
+    signal id_imm                   : word;
+    signal id_rs1_data, id_rs2_data : word;
 
     -- EX signals
     signal ex_opcode     : std_logic_vector(2 downto 0);
@@ -93,21 +94,26 @@ begin
     ------------------------------
     ------------------------------
 
+    instruction_decoder : entity work.riscv_decoder(Behavioral)
+        port map (insn    => if_id_regs.ir,
+                  decoded => id_decoded);
+
     -- extract information from IR
-    id_imm   <= if_id_regs.ir(15 downto 0);
-    id_addra <= if_id_regs.ir(10 downto 6);
-    id_addrb <= if_id_regs.ir(15 downto 11);
+    id_imm      <= if_id_regs.ir(15 downto 0);
+    id_rs1_addr <= id_decoded.rs1;
+    id_rs2_addr <= id_decoded.rs2;
+    id_rd_addr  <= id_decoded.rd;
 
     -- Instantiate the register file
     register_file : entity work.regfile(Behavioral)
         port map (clk   => clk,
                   rst_n => rst_n,
-                  addra => id_addra,
-                  addrb => id_addrb,
-                  rega  => id_rega,
-                  regb  => id_regb,
-                  addrw => id_addrw,
-                  we    => id_regfile_we);
+                  addra => id_rs1_addr,
+                  addrb => id_rs2_addr,
+                  rega  => id_rs1_data,
+                  regb  => id_rs2_data,
+                  addrw => wb_rd_addr,
+                  we    => wb_regfile_we);
 
     -- purpose: Create the ID/EX pipeline registers
     -- type   : sequential
@@ -210,7 +216,7 @@ begin
     mem_wb_regs : process (clk, rst_n) is
     begin  -- process mem_wb_regs
         if rst_n = '0' then             -- asynchronous reset (active low)
-
+            mem_wb_regs <= c_mem_wb_regs_reset;
         elsif rising_edge(clk) then     -- rising clock edge
             -- defaults
             mem_wb_regs.ir         <= ex_mem_regs.ir;
@@ -239,7 +245,7 @@ begin
     -- type   : combinational
     -- inputs : mem_wb_regs
     -- outputs: register file signals
-    writeback_proc: process (mem_wb_regs) is
+    writeback_proc : process (mem_wb_regs) is
     begin  -- process writeback_proc
         if write_to_rd then
             rf_addrw <= mem_wb_regs.ir(RD);
