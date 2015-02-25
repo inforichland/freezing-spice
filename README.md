@@ -1,2 +1,2 @@
 # freezing-spice
-A pipelined MIPS implementation in VHDL
+A pipelined RISCV implementation in VHDL
