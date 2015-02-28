@@ -13,8 +13,8 @@ package common is
 
     -- pipeline registers between ID and EX stages
     type id_ex_regs_t is record
-        a   : word;
-        b   : word;
+        rs1 : word;
+        rs2 : word;
         npc : word;
         ir  : word;
         imm : word;
@@ -33,8 +33,8 @@ package common is
     constant c_if_id_regs_reset : if_id_regs_t := (ir  => (others => '0'),
                                                    npc => (others => '0'));
 
-    constant c_id_ex_regs_reset : id_ex_regs_t := (a   => (others => '0'),
-                                                   b   => (others => '0'),
+    constant c_id_ex_regs_reset : id_ex_regs_t := (rs1 => (others => '0'),
+                                                   rs2 => (others => '0'),
                                                    npc => (others => '0'),
                                                    ir  => (others => '0'),
                                                    imm => (others => '0'));

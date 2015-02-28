@@ -1,15 +1,17 @@
 library ieee;
 use ieee.std_logic_1164.all;
 
+use work.common.all;
+
 package decode_pkg is
     -- Enumerated types
-    type alu_func_t is (ALU_ADD, ALU_ADDU, ALU_SUB, ALU_SUBU, ALU_SLT, ALU_SLTU, ALU_AND, ALU_OR, ALU_XOR, ALU_SLL, ALU_SRA, ALU_SRL);
+    type alu_func_t is (ALU_NONE, ALU_ADD, ALU_ADDU, ALU_SUB, ALU_SUBU, ALU_SLT, ALU_SLTU, ALU_AND, ALU_OR, ALU_XOR, ALU_SLL, ALU_SRA, ALU_SRL);
     type op2_src_t is (OP2_REG, OP2_IMM);
     type insn_type_t is (OP_ILLEGAL, OP_LUI, OP_AUIPC, OP_JAL, OP_JALR, OP_BRANCH, OP_LOAD, OP_STORE, OP_ALU);
-    type imm_type_t is (IMM_I, IMM_S, IMM_B, IMM_U, IMM_J);
-    type branch_type_t is (BEQ, BNE, BLT, BGE, BLTU, BGEU);
-    type load_type_t is (LB, LH, LW, LBU, LHU);
-    type store_type_t is (SB, SH, SW);
+    type imm_type_t is (IMM_NONE, IMM_I, IMM_S, IMM_B, IMM_U, IMM_J);
+    type branch_type_t is (BRANCH_NONE, BEQ, BNE, BLT, BGE, BLTU, BGEU);
+    type load_type_t is (LOAD_NONE, LB, LH, LW, LBU, LHU);
+    type store_type_t is (STORE_NONE, SB, SH, SW);
 
     -- structure for decoded instruction    
     type decoded_t is record
@@ -26,13 +28,13 @@ package decode_pkg is
         imm         : word;
     end record decoded_t;
 
-    constant c_decoded_reset : decoded_t := (alu_func    => ALU_ADD,
-                                             op2_type    => OP2_REG,
+    constant c_decoded_reset : decoded_t := (alu_func    => ALU_NONE,
+                                             op2_src     => OP2_REG,
                                              insn_type   => OP_ILLEGAL,
-                                             imm_type    => IMM_I,
-                                             branch_type => BEQ,
-                                             load_type   => LB,
-                                             store_type  => SB,
+                                             imm_type    => IMM_NONE,
+                                             branch_type => BRANCH_NONE,
+                                             load_type   => LOAD_NONE,
+                                             store_type  => STORE_NONE,
                                              rs1         => "00000",
                                              rs2         => "00000",
                                              rd          => "00000",

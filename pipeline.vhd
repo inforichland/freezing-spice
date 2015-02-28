@@ -5,7 +5,7 @@ use ieee.numeric_std.all;
 use work.common.all;
 use work.decode_pkg.all;
 
-entity mips is
+entity pipeline is
     generic (g_initial_pc : unsigned(31 downto 0) := (others => '0'));
     port (clk            : in  std_logic;
           rst_n          : in  std_logic;
@@ -17,7 +17,7 @@ entity mips is
           data_out_valid : out std_logic);
 end entity;
 
-architecture Behavioral of mips is
+architecture Behavioral of pipeline is
     -- constants
     constant c_op_alu    : std_logic_vector(2 downto 0) := "001";  -- ALU instruction
     constant c_op_load   : std_logic_vector(2 downto 0) := "100";  -- load instruction
@@ -35,9 +35,10 @@ architecture Behavioral of mips is
     signal next_pc : unsigned(31 downto 0);
 
     -- ID signals
-    signal id_decoded               : decoded_t := c_decoded_reset;
+    signal id_decoded               : decoded_t;
     signal id_imm                   : word;
     signal id_rs1_data, id_rs2_data : word;
+    signal id_rs1_addr, id_rs2_addr : std_logic_vector(4 downto 0);
 
     -- EX signals
     signal ex_opcode     : std_logic_vector(2 downto 0);
@@ -98,8 +99,8 @@ begin
         port map (insn    => if_id_regs.ir,
                   decoded => id_decoded);
 
-    -- extract information from IR
-    id_imm      <= if_id_regs.ir(15 downto 0);
+    -- extract information from decoder
+    id_imm      <= id_decoded.imm;
     id_rs1_addr <= id_decoded.rs1;
     id_rs2_addr <= id_decoded.rs2;
     id_rd_addr  <= id_decoded.rd;
@@ -125,11 +126,11 @@ begin
             id_ex_regs <= c_id_ex_regs_reset;
         elsif rising_edge(clk) then     -- rising clock edge
             if (insn_valid = '1') then
-                id_ex_regs.a   <= regs_a;
-                id_ex_regs.b   <= regs_b;
+                id_ex_regs.rs1 <= id_rs1_data;
+                id_ex_regs.rs2 <= id_rs2_data;
                 id_ex_regs.npc <= if_id_regs.npc;
                 id_ex_regs.ir  <= if_id_regs.ir;
-                id_ex_regs.imm <= sign_extend(id_imm);
+                id_ex_regs.imm <= id_imm;
             end if;
         end if;
     end process id_ex_regs_proc;
@@ -149,31 +150,31 @@ begin
     -- outputs: ex_*
     ops_sel_proc : process (id_ex_regs) is
     begin  -- process ops_sel_proc
-        if ex_opcode = c_op_alu_imm then
-            ex_a <= id_ex_regs.a;
-            ex_b <= id_ex_regs.imm;
-        elsif ex_opcode = c_op_branch then
-            ex_a <= id_ex_regs.npc;
-            ex_b <= id_ex_regs.imm(29 downto 2) & "00";  -- shift left 2
-            if id_ex_regs.a = c_zero then
-                ex_cond <= '1';
-            else
-                ex_cond <= '0';
-            end if;
+        if id_ex_regs.insn_type = OP_ALU then
+            ex_op1 <= id_ex_regs.rs1;
+            ex_op2 <= id_ex_regs.imm;
+        elsif id_ex_regs.insn_type = OP_BRANCH then
+            ex_op1 <= id_ex_regs.npc;
+            ex_op2 <= id_ex_regs.imm(29 downto 2) & "00";  -- shift left 2
         else
-            ex_a <= id_ex_regs.a;
-            ex_b <= id_ex_regs.b;
+            ex_op1 <= id_ex_regs.rs1;
+            ex_op2 <= id_ex_regs.rs2;
         end if;
     end process ops_sel_proc;
 
-    ex_alu_output <= ex_a + ex_b;
-
     -- instantiate the Arithmetic/Logic Unit
---    al_unit : entity work.alu(Behavioral)
---        port map (func   => ex_alu_func,
---                  a      => ex_a,
---                  b      => ex_b,
---                  result => ex_alu_output);
+    arithmetic_logic_unit : entity work.alu(Behavioral)
+        port map (func   => ex_alu_func,
+                  a      => ex_op1,
+                  b      => ex_op2,
+                  result => ex_alu_output);
+
+    -- check truth of conditionals for branch instructions
+    conditionals : entity work.compare_unit(behavioral)
+        port map (branch_type    => id_ex_regs.branch_type,
+                  op1            => ex_op1,
+                  op2            => ex_op2,
+                  compare_result => ex_compare_result);
 
     -- purpose: Create the EX/MEM pipeline registers
     -- type   : sequential
@@ -188,12 +189,12 @@ begin
             ex_mem_regs.ir           <= id_ex_regs.ir;
             ex_mem_regs.branch_taken <= '0';
 
-            if (ex_opcode = c_op_alu) then
+            if (ex_insn_type = OP_ALU) then
                 ex_mem_regs.alu_output <= ex_alu_output;
-            elsif ((ex_opcode = c_op_load) or (ex_opcode = c_op_store)) then
-                ex_mem_regs.alu_output <= unsigned(id_ex_regs.a) + unsigned(id_ex_regs.imm);
-                ex_mem_regs.b          <= id_ex_regs.b;
-            elsif (ex_opcode = c_op_branch and ex_cond = '1') then
+            elsif ((ex_insn_type = OP_LOAD) or (ex_insn_type = OP_STORE)) then
+                ex_mem_regs.alu_output <= ex_alu_output;
+                ex_mem_regs.op2        <= id_ex_regs.op2;
+            elsif (ex_insn_type = OP_JAL or ex_insn_type = OP_JALR or ex_compare_result = '1') then
                 ex_mem_regs.branch_taken = '1';
             end if;
         end if;
