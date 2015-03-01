@@ -23,13 +23,6 @@ begin  -- architecture test
             compare_result => compare_result);
     
     process
-        procedure println (
-            str : in string) is
-            variable l : line;
-        begin  -- procedure println
-            write(l, str);
-            writeline(output, l);
-        end procedure println;
     begin
         ----------------------------------------------------------------
         -- BEQ

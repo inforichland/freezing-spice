@@ -1,5 +1,6 @@
 library ieee;
 use ieee.std_logic_1164.all;
+use std.textio.all;
 
 use work.common.all;
 
@@ -26,6 +27,7 @@ package decode_pkg is
         rs2         : std_logic_vector(4 downto 0);
         rd          : std_logic_vector(4 downto 0);
         imm         : word;
+        opcode      : std_logic_vector(6 downto 0);
     end record decoded_t;
 
     constant c_decoded_reset : decoded_t := (alu_func    => ALU_NONE,
@@ -38,7 +40,8 @@ package decode_pkg is
                                              rs1         => "00000",
                                              rs2         => "00000",
                                              rd          => "00000",
-                                             imm         => (others => '0'));
+                                             imm         => (others => '0'),
+                                             opcode      => (others => 'X'));
 
     -- Constants
     constant c_op_load     : std_logic_vector(6 downto 0) := "0000011";
@@ -52,5 +55,63 @@ package decode_pkg is
     constant c_op_jalr     : std_logic_vector(6 downto 0) := "1100111";
     constant c_op_jal      : std_logic_vector(6 downto 0) := "1101111";
     constant c_op_system   : std_logic_vector(6 downto 0) := "1110011";
+
+    procedure print (insn_type : in insn_type_t);
+    procedure print (slv : in std_logic_vector);
     
 end package decode_pkg;
+
+package body decode_pkg is
+
+    procedure print (insn_type : in insn_type_t) is
+        variable l : line;
+    begin
+        write(l, string'("Instruction type: "));
+        if insn_type = OP_LUI then
+            write(l, string'("LUI"));
+            writeline(output, l);
+        elsif insn_type = OP_AUIPC then
+            write(l, string'("AUIPC"));
+            writeline(output, l);
+        elsif insn_type = OP_JAL then
+            write(l, string'("JAL"));
+            writeline(output, l);
+        elsif insn_type = OP_JALR then
+            write(l, string'("JALR"));
+            writeline(output, l);
+        elsif insn_type = OP_BRANCH then
+            write(l, string'("BRANCH"));
+            writeline(output, l);
+        elsif insn_type = OP_LOAD then
+            write(l, string'("LOAD"));
+            writeline(output, l);
+        elsif insn_type = OP_STORE then
+            write(l, string'("STORE"));
+            writeline(output, l);
+        elsif insn_type = OP_ALU then
+            write(l, string'("ALU"));
+            writeline(output, l);
+        else
+            write(l, string'("ILLEGAL"));
+            writeline(output, l);
+        end if;
+    end procedure print;
+
+    procedure print (slv : in std_logic_vector) is
+        variable l : line;
+    begin  -- procedure print
+        for i in slv'range loop
+            if slv(i) = '0' then
+                write(l, string'("0"));
+            elsif slv(i) = '1' then
+                write(l, string'("1"));
+            elsif slv(i) = 'X' then
+                write(l, string'("X"));
+            elsif slv(i) = 'U' then
+                write(l, string'("U"));
+            end if;
+        end loop;  -- i
+        writeline(output, l);
+    end procedure print;
+
+end package body decode_pkg;

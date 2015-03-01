@@ -1,5 +1,6 @@
 library ieee;
 use ieee.std_logic_1164.all;
+use std.textio.all;
 
 package common is
     -- definition for a machine word
@@ -38,16 +39,17 @@ package common is
                                                    npc => (others => '0'),
                                                    ir  => (others => '0'),
                                                    imm => (others => '0'));
-    
+
     -- sign-extend a 16-bit vector to 32 bits
-    function sign_extend (value : std_logic_vector(15 downto 0)) return word;
+    function sign_extend (value : in std_logic_vector(15 downto 0)) return word;
+    procedure println (str      : in string);
     
 end package common;
 
 package body common is
 
     -- purpose: sign-extend a vector from 16 to 32 bits
-    function sign_extend (value : std_logic_vector(15 downto 0)) return word is
+    function sign_extend (value : in std_logic_vector(15 downto 0)) return word is
         variable result : word := (others => '0');
     begin  -- function sign_extend
         for i in 31 downto 16 loop
@@ -57,5 +59,13 @@ package body common is
 
         return result;
     end function sign_extend;
+
+    -- print a string with a newline
+    procedure println (str : in string) is
+        variable l : line;
+    begin  -- procedure println
+        write(l, str);
+        writeline(output, l);
+    end procedure println;
     
 end package body common;
