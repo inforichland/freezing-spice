@@ -42,7 +42,7 @@ begin  -- architecture behavioral
 
             -- Jump And Link
             when c_op_jal =>
-                decoded.insn_type <= OP_JAl;
+                decoded.insn_type <= OP_JAL;
                 imm_type          := IMM_J;
 
             -- Jump And Link Register
