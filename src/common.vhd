@@ -43,6 +43,14 @@ package common is
     -- sign-extend a 16-bit vector to 32 bits
     function sign_extend (value : in std_logic_vector(15 downto 0)) return word;
     procedure println (str      : in string);
+
+    -- instruction formats
+    type r_insn_t is (R_ADD, R_SLT, R_SLTU, R_AND, R_OR, R_XOR, R_SLL, R_SRL, R_SUB, R_SRA);
+    type i_insn_t is (I_JALR, I_LB, I_LH, I_LW, I_LBU, I_LHU, I_ADDI, I_SLTI, I_SLTIU, I_XORI, I_ORI, I_ANDI, I_SLLI, I_SRLI, I_SRAI);
+    type s_insn_t is (S_SB, S_SH, S_SW);
+    type sb_insn_t is (SB_BEQ, SB_BNE, SB_BLT, SB_BGE, SB_BLTU, SB_BGEU);
+    type u_insn_t is (U_LUI, U_AUIPC);
+    type uj_insn_t is (UJ_JAL);
     
 end package common;
 

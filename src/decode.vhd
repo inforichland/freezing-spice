@@ -171,9 +171,10 @@ begin  -- architecture behavioral
                 decoded.imm(0)           <= insn(7);
 
             when IMM_B =>
-                for i in 31 downto 12 loop
+                for i in 31 downto 13 loop
                     decoded.imm(i) <= insn(31);
                 end loop;  -- i
+                decoded.imm(12)          <= insn(31);
                 decoded.imm(11)          <= insn(7);
                 decoded.imm(10 downto 5) <= insn(30 downto 25);
                 decoded.imm(4 downto 1)  <= insn(11 downto 8);
