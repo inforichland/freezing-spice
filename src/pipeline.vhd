@@ -142,31 +142,22 @@ begin
     -- the address to write to 'rd' during a JAL or JALR
     ex_jump_back_addr <= unsigned(id_ex_regs.npc) + to_unsigned(4, 3);
 
-    -- purpose: choose operands for ALU
-    -- type   : combinational
-    -- inputs : id_ex_regs
-    -- outputs: ex_*
-    ops_sel_proc : process (id_ex_regs) is
-    begin  -- process ops_sel_proc
-        ex_alu_func <= id_ex_regs.alu_func;
+    -- choose first operand for ALU
+    ex_op1 <= id_ex_regs.npc when (id_ex_regs.insn_type = OP_BRANCH or
+                                   id_ex_regs.insn_type = OP_JAL or
+                                   id_ex_regs.insn_type = OP_JALR)
+              else id_ex_regs.rs1_data;
 
-        if id_ex_regs.insn_type = OP_ALU then
-            ex_op1 <= id_ex_regs.rs1_data;
-            ex_op2 <= id_ex_regs.imm;
-        elsif id_ex_regs.insn_type = OP_BRANCH or
-              id_ex_regs.insn_type = OP_JAL or
-              id_ex_regs.insn_type = OP_JALR then
-            ex_op1 <= id_ex_regs.npc;
-            ex_op2 <= id_ex_regs.imm;
-        else
-            ex_op1 <= id_ex_regs.rs1_data;
-            ex_op2 <= id_ex_regs.rs2_data;
-        end if;
-    end process ops_sel_proc;
+    -- choose second operand for ALU
+    ex_op2 <= id_ex_regs.imm when (id_ex_regs.insn_type = OP_ALU or
+                                   id_ex_regs.insn_type = OP_BRANCH or
+                                   id_ex_regs.insn_type = OP_JAL or
+                                   id_ex_regs.insn_type = OP_JALR)
+              else id_ex_regs.rs2_data;
 
     -- instantiate the Arithmetic/Logic Unit
     arithmetic_logic_unit : entity work.alu(Behavioral)
-        port map (func   => ex_alu_func,
+        port map (func   => id_ex_regs.alu_func,
                   a      => ex_op1,
                   b      => ex_op2,
                   result => ex_alu_output);
@@ -190,16 +181,12 @@ begin
             -- defaults
             ex_mem_regs.load_pc <= '0';
 
-            if (ex_insn_type = OP_ALU) then
-                ex_mem_regs.alu_output <= ex_alu_output;
-            elsif ((ex_insn_type = OP_LOAD) or (ex_insn_type = OP_STORE)) then
-                ex_mem_regs.alu_output <= ex_alu_output;
-                ex_mem_regs.op2        <= id_ex_regs.op2;
-            elsif (ex_compare_result = '1') then
+            -- pipeline registers
+            ex_mem_regs.alu_output <= ex_alu_output;
+            ex_mem_regs.jump_back_addr <= ex_jump_back_addr;
+
+            if (ex_compare_result = '1' or ex_insn_type = OP_JAL or ex_insn_type = OP_JALR) then
                 ex_mem_regs.load_pc = '1';
-            elsif (ex_insn_type = OP_JAL or ex_insn_type = OP_JALR) then
-                ex_mem_regs.load_pc = '1';
-                ex_mem_regs.jump_back_addr <= ex_jump_back_addr;
             end if;
         end if;
     end process ex_mem_regs_proc;

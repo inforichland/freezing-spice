@@ -10,7 +10,6 @@ package decode_pkg is
         alu_func    : alu_func_t;
         op2_src     : op2_src_t;
         insn_type   : insn_type_t;
-        imm_type    : imm_type_t;
         branch_type : branch_type_t;
         load_type   : load_type_t;
         store_type  : store_type_t;

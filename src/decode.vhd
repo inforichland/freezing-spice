@@ -198,8 +198,6 @@ begin  -- architecture behavioral
                 
             when others => decoded.imm <= (others => '0');
         end case;
-
-        decoded.imm_type <= imm_type;
         
     end process decode_proc;
 
