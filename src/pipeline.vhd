@@ -18,12 +18,6 @@ entity pipeline is
 end entity;
 
 architecture Behavioral of pipeline is
-    -- constants
-    constant c_op_alu    : std_logic_vector(2 downto 0) := "001";  -- ALU instruction
-    constant c_op_load   : std_logic_vector(2 downto 0) := "100";  -- load instruction
-    constant c_op_store  : std_logic_vector(2 downto 0) := "101";  -- store instruction
-    constant c_op_branch : std_logic_vector(2 downto 0) := "000";  -- branch instruction
-
     -- architectural registers
     signal pc : unsigned(31 downto 0) := g_initial_pc;  -- Program Counter
 
@@ -41,14 +35,15 @@ architecture Behavioral of pipeline is
     signal id_rs1_addr, id_rs2_addr : std_logic_vector(4 downto 0);
 
     -- EX signals
-    signal ex_opcode     : std_logic_vector(2 downto 0);
-    signal ex_a          : word;
-    signal ex_b          : word;
-    signal ex_alu_output : word;
+    signal ex_opcode         : std_logic_vector(2 downto 0);
+    signal ex_a              : word;
+    signal ex_b              : word;
+    signal ex_alu_output     : word;
+    signal ex_jump_back_addr : unsigned(31 downto 0);
 
     -- MEM signals
-    signal mem_branch_taken : std_logic;
-    signal mem_branch_addr  : word;
+    signal mem_load_pc      : std_logic;
+    signal mem_next_pc_addr : word;
 begin
 
     -----------------------------
@@ -58,7 +53,7 @@ begin
     -----------------------------
 
     -- decide on the next PC
-    next_pc <= (pc + 4) when (mem_branch_taken = '1') else unsigned(mem_branch_addr);
+    next_pc <= (pc + 4) when (mem_load_pc = '0') else unsigned(mem_next_pc_addr);
 
     -- purpose: create the PC register
     -- type   : sequential
@@ -99,12 +94,6 @@ begin
         port map (insn    => if_id_regs.ir,
                   decoded => id_decoded);
 
-    -- extract information from decoder
-    id_imm      <= id_decoded.imm;
-    id_rs1_addr <= id_decoded.rs1;
-    id_rs2_addr <= id_decoded.rs2;
-    id_rd_addr  <= id_decoded.rd;
-
     -- Instantiate the register file
     register_file : entity work.regfile(Behavioral)
         port map (clk   => clk,
@@ -116,6 +105,9 @@ begin
                   addrw => wb_rd_addr,
                   we    => wb_regfile_we);
 
+    -- determine if a stall of the ID stage is required
+    id_stall <= insn_valid;
+
     -- purpose: Create the ID/EX pipeline registers
     -- type   : sequential
     -- inputs : clk, rst_n
@@ -125,12 +117,18 @@ begin
         if rst_n = '0' then             -- asynchronous reset (active low)
             id_ex_regs <= c_id_ex_regs_reset;
         elsif rising_edge(clk) then     -- rising clock edge
-            if (insn_valid = '1') then
-                id_ex_regs.rs1 <= id_rs1_data;
-                id_ex_regs.rs2 <= id_rs2_data;
-                id_ex_regs.npc <= if_id_regs.npc;
-                id_ex_regs.ir  <= if_id_regs.ir;
-                id_ex_regs.imm <= id_imm;
+            if (id_stall = '0') then
+                id_ex_regs.rs1_data    <= id_rs1_data;
+                id_ex_regs.rs2_data    <= id_rs2_data;
+                id_ex_regs.npc         <= if_id_regs.npc;
+                id_ex_regs.alu_func    <= id_decoded.alu_func;
+                id_ex_regs.op2_src     <= id_decoded.op2_src;
+                id_ex_regs.insn_type   <= id_decoded.insn_type;
+                id_ex_regs.branch_type <= id_decoded.branch_type;
+                id_ex_regs.load_type   <= id_decoded.load_type;
+                id_ex_regs.store_type  <= id_decoded.store_type;
+                id_ex_regs.rd_addr     <= id_decoded.rd;
+                id_ex_regs.imm         <= id_decoded.imm;
             end if;
         end if;
     end process id_ex_regs_proc;
@@ -141,8 +139,8 @@ begin
     -------------------
     -------------------
 
-    -- extract information from IR
-    ex_opcode <= id_ex_regs.ir(31 downto 29);
+    -- the address to write to 'rd' during a JAL or JALR
+    ex_jump_back_addr <= unsigned(id_ex_regs.npc) + to_unsigned(4, 3);
 
     -- purpose: choose operands for ALU
     -- type   : combinational
@@ -150,15 +148,19 @@ begin
     -- outputs: ex_*
     ops_sel_proc : process (id_ex_regs) is
     begin  -- process ops_sel_proc
+        ex_alu_func <= id_ex_regs.alu_func;
+
         if id_ex_regs.insn_type = OP_ALU then
-            ex_op1 <= id_ex_regs.rs1;
+            ex_op1 <= id_ex_regs.rs1_data;
             ex_op2 <= id_ex_regs.imm;
-        elsif id_ex_regs.insn_type = OP_BRANCH then
+        elsif id_ex_regs.insn_type = OP_BRANCH or
+              id_ex_regs.insn_type = OP_JAL or
+              id_ex_regs.insn_type = OP_JALR then
             ex_op1 <= id_ex_regs.npc;
-            ex_op2 <= id_ex_regs.imm(29 downto 2) & "00";  -- shift left 2
+            ex_op2 <= id_ex_regs.imm;
         else
-            ex_op1 <= id_ex_regs.rs1;
-            ex_op2 <= id_ex_regs.rs2;
+            ex_op1 <= id_ex_regs.rs1_data;
+            ex_op2 <= id_ex_regs.rs2_data;
         end if;
     end process ops_sel_proc;
 
@@ -186,16 +188,18 @@ begin
             ex_mem_regs <= c_ex_mem_regs_reset;
         elsif rising_edge(clk) then     -- rising clock edge
             -- defaults
-            ex_mem_regs.ir           <= id_ex_regs.ir;
-            ex_mem_regs.branch_taken <= '0';
+            ex_mem_regs.load_pc <= '0';
 
             if (ex_insn_type = OP_ALU) then
                 ex_mem_regs.alu_output <= ex_alu_output;
             elsif ((ex_insn_type = OP_LOAD) or (ex_insn_type = OP_STORE)) then
                 ex_mem_regs.alu_output <= ex_alu_output;
                 ex_mem_regs.op2        <= id_ex_regs.op2;
-            elsif (ex_insn_type = OP_JAL or ex_insn_type = OP_JALR or ex_compare_result = '1') then
-                ex_mem_regs.branch_taken = '1';
+            elsif (ex_compare_result = '1') then
+                ex_mem_regs.load_pc = '1';
+            elsif (ex_insn_type = OP_JAL or ex_insn_type = OP_JALR) then
+                ex_mem_regs.load_pc = '1';
+                ex_mem_regs.jump_back_addr <= ex_jump_back_addr;
             end if;
         end if;
     end process ex_mem_regs_proc;
@@ -207,8 +211,8 @@ begin
     ------------------
     ------------------
 
-    mem_branch_taken <= ex_mem_regs.branch_taken;
-    mem_branch_addr  <= ex_mem_regs.alu_output;
+    mem_load_pc      <= ex_mem_regs.load_pc;
+    mem_next_pc_addr <= ex_mem_regs.alu_output;
 
     -- purpose: create pipeline registers between MEM and WB
     -- type   : sequential

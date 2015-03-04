@@ -14,35 +14,40 @@ package common is
 
     -- pipeline registers between ID and EX stages
     type id_ex_regs_t is record
-        rs1 : word;
-        rs2 : word;
-        npc : word;
-        ir  : word;
-        imm : word;
+        rs1_data    : word;
+        rs2_data    : word;
+        npc         : word;
+        alu_func    : alu_func_t;
+        op2_src     : op2_src_t;
+        insn_type   : insn_type_t;
+        branch_type : branch_type_t;
+        load_type   : load_type_t;
+        store_type  : store_type_t;
+        rd_addr     : std_logic_vector(4 downto 0);
+        imm         : word;
     end record id_ex_regs_t;
 
     -- pipeline registers between EX and MEM stages
     type ex_mem_regs_t is record
-        lmd          : word;
-        branch_taken : std_logic;
-        npc          : word;
-        ir           : word;
-        b            : word;
+        lmd     : word;
+        load_pc : std_logic;
+        npc     : word;
+        ir      : word;
+        b       : word;
     end record ex_mem_regs_t;
 
     -- constants
     constant c_if_id_regs_reset : if_id_regs_t := (ir  => (others => '0'),
                                                    npc => (others => '0'));
 
-    constant c_id_ex_regs_reset : id_ex_regs_t := (rs1 => (others => '0'),
-                                                   rs2 => (others => '0'),
-                                                   npc => (others => '0'),
-                                                   ir  => (others => '0'),
-                                                   imm => (others => '0'));
+    constant c_id_ex_regs_reset : id_ex_regs_t := (rs1_data => (others => '0'),
+                                                   rs2_data => (others => '0'),
+                                                   npc      => (others => '0'),
+                                                   ir       => (others => '0'),
+                                                   imm      => (others => '0'));
 
-    -- sign-extend a 16-bit vector to 32 bits
-    function sign_extend (value : in std_logic_vector(15 downto 0)) return word;
-    procedure println (str      : in string);
+    -- print a string with a newline
+    procedure println (str : in string);
 
     -- instruction formats
     type r_insn_t is (R_ADD, R_SLT, R_SLTU, R_AND, R_OR, R_XOR, R_SLL, R_SRL, R_SUB, R_SRA);
@@ -55,18 +60,6 @@ package common is
 end package common;
 
 package body common is
-
-    -- purpose: sign-extend a vector from 16 to 32 bits
-    function sign_extend (value : in std_logic_vector(15 downto 0)) return word is
-        variable result : word := (others => '0');
-    begin  -- function sign_extend
-        for i in 31 downto 16 loop
-            result(i) := value(15);
-        end loop;  -- i
-        result(15 downto 0) := value;
-
-        return result;
-    end function sign_extend;
 
     -- print a string with a newline
     procedure println (str : in string) is
