@@ -5,16 +5,6 @@ use std.textio.all;
 use work.common.all;
 
 package decode_pkg is
-    -- Enumerated types
-    type alu_func_t is (ALU_NONE, ALU_ADD, ALU_ADDU, ALU_SUB, ALU_SUBU, ALU_SLT, ALU_SLTU, ALU_AND, ALU_OR, ALU_XOR, ALU_SLL, ALU_SRA, ALU_SRL);
-    type op1_src_t is (OP1_REG, OP1_NPC);
-    type op2_src_t is (OP2_REG, OP2_IMM);
-    type insn_type_t is (OP_ILLEGAL, OP_LUI, OP_AUIPC, OP_JAL, OP_JALR, OP_BRANCH, OP_LOAD, OP_STORE, OP_ALU);
-    type imm_type_t is (IMM_NONE, IMM_I, IMM_S, IMM_B, IMM_U, IMM_J);
-    type branch_type_t is (BRANCH_NONE, BEQ, BNE, BLT, BGE, BLTU, BGEU);
-    type load_type_t is (LOAD_NONE, LB, LH, LW, LBU, LHU);
-    type store_type_t is (STORE_NONE, SB, SH, SW);
-
     -- structure for decoded instruction    
     type decoded_t is record
         alu_func    : alu_func_t;
