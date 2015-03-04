@@ -14,6 +14,26 @@ architecture testbench of decoder_tb is
     -- outputs
     signal decoded : decoded_t;
 
+    procedure verify_r_type (insn_type   : in insn_type_t;
+                             r_insn      : in r_insn_t;
+                             rs1, rs2, d : in std_logic_vector(4 downto 0)) is
+    begin
+        print(insn_type);
+        assert decoded.insn_type = insn_type report "Invalid instruction type" severity error;
+        case (r_insn) is
+            when R_ADD  => assert decoded.alu_func = ALU_ADD report "Invalid ALU function" severity error;
+            when R_SLT  => assert decoded.alu_func = ALU_SLT report "Invalid ALU function" severity error;
+            when R_SLTU => assert decoded.alu_func = ALU_SLTU report "Invalid ALU function" severity error;
+            when R_AND  => assert decoded.alu_func = ALU_AND report "Invalid ALU function" severity error;
+            when R_OR   => assert decoded.alu_func = ALU_OR report "Invalid ALU function" severity error;
+            when R_XOR  => assert decoded.alu_func = ALU_XOR report "Invalid ALU function" severity error;
+            when R_SLL  => assert decoded.alu_func = ALU_SLL report "Invalid ALU function" severity error;
+            when R_SRL  => assert decoded.alu_func = ALU_SRL report "Invalid ALU function" severity error;
+            when R_SUB  => assert decoded.alu_func = ALU_SUB report "Invalid ALU function" severity error;
+            when R_SRA  => assert decoded.alu_func = ALU_SRA report "Invalid ALU function" severity error;
+        end case;
+    end procedure verify_r_type;
+
     -- purpose: verify U-type instruction
     procedure verify_u_type (
         insn_type : in insn_type_t;
@@ -110,9 +130,9 @@ architecture testbench of decoder_tb is
 
     -- purpose: verify a decoded I-type shift instruction
     procedure verify_i_shift (
-        i_insn   : in i_insn_t;
-        shamt    : in std_logic_vector(4 downto 0);
-        rs1, rd  : in std_logic_vector(4 downto 0)) is
+        i_insn  : in i_insn_t;
+        shamt   : in std_logic_vector(4 downto 0);
+        rs1, rd : in std_logic_vector(4 downto 0)) is
     begin  -- procedure verify_i_shift
         println("Instruction type: ALU SHIFT");
         assert decoded.insn_type = OP_ALU report "Expected OP_ALU" severity error;
@@ -221,7 +241,7 @@ begin  -- architecture test
         insn <= encode_s_type(S_SB, "011111111110", 21, 22);
         wait for 1 ns;
         verify_s_type(OP_STORE, S_SB, "00000000000000000000011111111110", "10101", "10110");
-        
+
         -- SH
         insn <= encode_s_type(S_SH, "011111111110", 21, 22);
         wait for 1 ns;
@@ -231,62 +251,102 @@ begin  -- architecture test
         insn <= encode_s_type(S_SW, "001111111110", 23, 24);
         wait for 1 ns;
         verify_s_type(OP_STORE, S_SW, "00000000000000000000001111111110", "10111", "11000");
-        
+
         -- ADDI
         insn <= encode_i_type(I_ADDI, "111111111111", 25, 26);
         wait for 1 ns;
         verify_i_type(OP_ALU, I_ADDI, "11111111111111111111111111111111", "11001", "11010");
-        
+
         -- SLTI
         insn <= encode_i_type(I_SLTI, "111111111110", 27, 28);
         wait for 1 ns;
         verify_i_type(OP_ALU, I_SLTI, "11111111111111111111111111111110", "11011", "11100");
-        
+
         -- SLTIU
         insn <= encode_i_type(I_SLTIU, "111111111100", 29, 30);
         wait for 1 ns;
         verify_i_type(OP_ALU, I_SLTIU, "11111111111111111111111111111100", "11101", "11110");
-        
+
         -- XORI
         insn <= encode_i_type(I_XORI, "111111111110", 31, 30);
         wait for 1 ns;
         verify_i_type(OP_ALU, I_XORI, "11111111111111111111111111111110", "11111", "11110");
-        
+
         -- ORI
         insn <= encode_i_type(I_ORI, "111111111110", 1, 2);
         wait for 1 ns;
         verify_i_type(OP_ALU, I_ORI, "11111111111111111111111111111110", "00001", "00010");
-        
+
         -- ANDI
         insn <= encode_i_type(I_ANDI, "111111111110", 3, 4);
         wait for 1 ns;
         verify_i_type(OP_ALU, I_ANDI, "11111111111111111111111111111110", "00011", "00100");
-        
+
         -- SLLI
         insn <= encode_i_shift(I_SLLI, "11100", 5, 6);
         wait for 1 ns;
         verify_i_shift(I_SLLI, "11100", "00101", "00110");
-        
+
         -- SRLI
         insn <= encode_i_shift(I_SRLI, "11101", 7, 8);
         wait for 1 ns;
         verify_i_shift(I_SRLI, "11101", "00101", "00110");
-        
+
         -- SRAI
         insn <= encode_i_shift(I_SRAI, "11110", 9, 10);
         wait for 1 ns;
         verify_i_shift(I_SRAI, "11110", "00101", "00110");
-        
+
         -- ADD
+        insn <= encode_r_type(R_ADD, 2, 4, 8);
+        wait for 1 ns;
+        verify_r_type(OP_ALU, R_ADD, "00010", "00100", "01000");
+
         -- SUB
+        insn <= encode_r_type(R_SUB, 16, 31, 1);
+        wait for 1 ns;
+        verify_r_type(OP_ALU, R_SUB, "10000", "11111", "00001");
+        
         -- SLL
+        insn <= encode_r_type(R_SLL, 0, 0, 0);
+        wait for 1 ns;
+        verify_r_type(OP_ALU, R_SLL, "00000", "00000", "00000");
+
         -- SLT
+        insn <= encode_r_type(R_SLT, 16, 8, 4);
+        wait for 1 ns;
+        verify_r_type(OP_ALU, R_SLT, "10000", "01000", "00100");
+
         -- SLTU
+        insn <= encode_r_type(R_SLTU, 24, 12, 6);
+        wait for 1 ns;
+        verify_r_type(OP_ALU, R_SLTU, "11000", "01100", "00110");
+
         -- XOR
+        insn <= encode_r_type(R_XOR, 0, 0, 0);
+        wait for 1 ns;
+        verify_r_type(OP_ALU, R_XOR, "00000", "00000", "00000");
+
         -- SRL
+        insn <= encode_r_type(R_SRL, 0, 0, 0);
+        wait for 1 ns;
+        verify_r_type(OP_ALU, R_SRL, "00000", "00000", "00000");
+
         -- SRA
+        insn <= encode_r_type(R_SRA, 0, 0, 0);
+        wait for 1 ns;
+        verify_r_type(OP_ALU, R_SRA, "00000", "00000", "00000");
+        
         -- OR
+        insn <= encode_r_type(R_OR, 0, 0, 0);
+        wait for 1 ns;
+        verify_r_type(OP_ALU, R_OR, "00000", "00000", "00000");
+
         -- AND
+        insn <= encode_r_type(R_AND, 0, 0, 0);
+        wait for 1 ns;
+        verify_r_type(OP_ALU, R_AND, "00000", "00000", "00000");
+
         -- @todo others
 
         ----------------------------------------------------------------

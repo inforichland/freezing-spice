@@ -105,6 +105,7 @@ package body encode_pkg is
                 result(31 downto 25) := "0000000";
                 result(14 downto 12) := "111";
         end case;
+        return result;
     end function encode_r_type;
 
                                         -- purpose: encode a UJ-type instruction
@@ -253,4 +254,3 @@ package body encode_pkg is
     end function encode_sb_type;
     
 end package body encode_pkg;
-
