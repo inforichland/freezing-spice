@@ -12,7 +12,7 @@ end entity decoder;
 architecture behavioral of decoder is
 begin  -- architecture behavioral
 
-    -- purpose: decode the MIPS32 instruction
+    -- purpose: decode the RISCV instruction
     -- type   : combinational
     -- inputs : insn
     -- outputs: decode
