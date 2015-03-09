@@ -18,12 +18,13 @@ package decode_pkg is
         rd          : std_logic_vector(4 downto 0);
         imm         : word;
         opcode      : std_logic_vector(6 downto 0);
+        rs1_rd      : std_logic;
+        rs2_rd      : std_logic;
     end record decoded_t;
 
     constant c_decoded_reset : decoded_t := (alu_func    => ALU_NONE,
                                              op2_src     => OP2_REG,
                                              insn_type   => OP_ILLEGAL,
-                                             imm_type    => IMM_NONE,
                                              branch_type => BRANCH_NONE,
                                              load_type   => LOAD_NONE,
                                              store_type  => STORE_NONE,
@@ -31,7 +32,9 @@ package decode_pkg is
                                              rs2         => "00000",
                                              rd          => "00000",
                                              imm         => (others => '0'),
-                                             opcode      => (others => 'X'));
+                                             opcode      => (others => 'X'),
+                                             rs1_rd      => '0',
+                                             rs2_rd      => '0');
 
     -- Constants
     constant c_op_load     : std_logic_vector(6 downto 0) := "0000011";

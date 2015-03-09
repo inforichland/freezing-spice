@@ -28,6 +28,8 @@ begin  -- architecture behavioral
         decoded.rs2    <= insn(24 downto 20);
         decoded.rd     <= insn(11 downto 7);
         decoded.opcode <= opcode;
+        decoded.rs1_rd <= '0';
+        decoded.rs2_rd <= '0';
 
         case (opcode) is
             -- Load Upper Immediate
@@ -49,11 +51,14 @@ begin  -- architecture behavioral
             when c_op_jalr =>
                 decoded.insn_type <= OP_JALR;
                 imm_type          := IMM_I;
+                decoded.rs1_rd    <= '1';
 
             -- Branch to target address, if condition is met
             when c_op_branch =>
                 decoded.insn_type <= OP_BRANCH;
                 imm_type          := IMM_B;
+                decoded.rs1_rd    <= '1';
+                decoded.rs2_rd    <= '1';
 
                 case (funct3) is
                     when "000"  => decoded.branch_type <= BEQ;
@@ -69,6 +74,7 @@ begin  -- architecture behavioral
             when c_op_load =>
                 decoded.insn_type <= OP_LOAD;
                 imm_type          := IMM_I;
+                decoded.rs1_rd    <= '1';
 
                 case (funct3) is
                     when "000"  => decoded.load_type <= LB;
@@ -83,6 +89,8 @@ begin  -- architecture behavioral
             when c_op_store =>
                 decoded.insn_type <= OP_STORE;
                 imm_type          := IMM_S;
+                decoded.rs1_rd    <= '1';
+                decoded.rs2_rd    <= '1';
 
                 case (funct3) is
                     when "000"  => decoded.store_type <= SB;
@@ -96,6 +104,7 @@ begin  -- architecture behavioral
                 decoded.insn_type <= OP_ALU;
                 decoded.op2_src   <= OP2_IMM;
                 imm_type          := IMM_I;
+                decoded.rs1_rd    <= '1';
 
                 case (funct3) is
                     when "000" => decoded.alu_func <= ALU_ADD;
@@ -118,6 +127,8 @@ begin  -- architecture behavioral
             -- perform computation with two register values
             when c_op_reg =>
                 decoded.insn_type <= OP_ALU;
+                decoded.rs1_rd    <= '1';
+                decoded.rs2_rd    <= '1';
 
                 case (funct3) is
                     when "000" =>

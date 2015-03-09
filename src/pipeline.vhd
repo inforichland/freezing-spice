@@ -6,20 +6,32 @@ use work.common.all;
 use work.decode_pkg.all;
 
 entity pipeline is
-    generic (g_initial_pc : unsigned(31 downto 0) := (others => '0'));
-    port (clk            : in  std_logic;
-          rst_n          : in  std_logic;
-          insn_in        : in  word;
-          insn_valid     : in  std_logic;
-          data_in        : in  word;
-          data_in_valid  : in  std_logic;
-          data_out       : out word;
-          data_out_valid : out std_logic);
+    generic (g_initial_pc : unsigned(31 downto 0) := (others => '0')
+             g_for_sim    : boolean               := false);
+    port (clk   : in std_logic;
+          rst_n : in std_logic;
+
+          -- Instruction interface
+          insn_in    : in  word;
+          insn_valid : in  std_logic;
+          insn_addr  : out word;
+
+          -- Data interface
+          data_in       : in  word;
+          data_out      : out word;
+          data_addr     : out word;
+          data_write_en : out std_logic;
+          data_read_en  : out std_logic;
+          data_in_valid : in  std_logic);
 end entity;
 
 architecture Behavioral of pipeline is
     -- architectural registers
     signal pc : unsigned(31 downto 0) := g_initial_pc;  -- Program Counter
+
+    -- stall signals
+    signal hazard_stall : std_logic;
+    signal cache_stall  : std_logic;
 
     -- pipeline registers
     signal if_id_regs : if_id_regs_t := c_if_id_regs_reset;
@@ -42,18 +54,36 @@ architecture Behavioral of pipeline is
     signal ex_jump_back_addr : unsigned(31 downto 0);
 
     -- MEM signals
-    signal mem_load_pc      : std_logic;
-    signal mem_next_pc_addr : word;
+    signal mem_load_pc       : std_logic;
+    signal mem_next_pc_addr  : word;
+    signal mem_data_addr     : word;
+    signal mem_data_write_en : std_logic;
+    signal mem_data_read_en  : std_logic;
+    signal mem_data_out      : word;
+    signal mem_data_in       : word;
+    signal mem_data_in_valid : std_logic;
 begin
+
+    -- Assign outputs
+    data_read_en <= '1' when id_ex_regs.insn_type = OP_LOAD else '0';
+
+    -- Determine when to stall the pipeline because of structural hazards
+    hazard_stall <= '1' when (((id_ex_regs.rd_addr = id_decoded.rs1) and (id_decoded.rs1 /= "00000") and (id_ex_regs.rf_wen = '1') and (id_decoded.rs1_rd = '1'))
+                              or ((ex_mem_regs.rd_addr = id_decoded.rs1) and (id_decoded.rs1 /= "00000") and (ex_mem_regs.rf_wen = '1') and (id_decoded.rs1_rd = '1'))
+                              or ((mem_wb_regs.rd_addr = id_decoded.rs1) and (id_decoded.rs1 /= "00000") and (mem_wb_regs.rf_wen = '1') and (id_decoded.rs1_rd = '1'))
+                              or ((id_ex_regs.rd_addr = id_decoded.rs2) and (id_decoded.rs2 /= "00000") and (id_ex_regs.rf_wen = '1') and (id_decoded.rs2_rd = '1'))
+                              or ((ex_mem_regs.rd_addr = id_decoded.rs2) and (id_decoded.rs2 /= "00000") and (ex_mem_regs.rf_wen = '1') and (id_decoded.rs2_rd = '1'))
+                              or ((mem_wb_regs.rd_addr = id_decoded.rs2) and (id_decoded.rs2 /= "00000") and (mem_wb_regs.rf_wen = '1') and (id_decoded.rs2_rd = '1'))
+                              or ((ex_mem_regs.insn_type = OP_LOAD) and (id_ex_regs.rd_addr = id_decoded.rs1) and (id_ex_regs.rd_addr /= "00000") and (id_decoded.rs1_rd))
+                              or ((ex_mem_regs.insn_type = OP_LOAD) and (id_ex_regs.rd_addr = id_decoded.rs2) and (id_ex_regs.rd_addr /= "00000") and (id_decoded.rs2_rd)));
+
+
 
     -----------------------------
     -----------------------------
     -- Instruction fetch stage --
     -----------------------------
     -----------------------------
-
-    -- decide on the next PC
-    next_pc <= (pc + 4) when (mem_load_pc = '0') else unsigned(mem_next_pc_addr);
 
     -- purpose: create the PC register
     -- type   : sequential
@@ -64,7 +94,14 @@ begin
         if rst_n = '0' then             -- asynchronous reset (active low)
             g_initial_pc <= (others => '0');
         elsif rising_edge(clk) then
-            pc <= next_pc;
+            if (hazard_stall = '0') and (cache_stall = '0') then
+                case (next_pc_sel) is
+                    when PC_SEQ        => pc <= pc + to_unsigned(4, 32);
+                    when PC_BRANCH_JAL => pc <= ex_branch_jal_target;
+                    when PC_JALR       => pc <= ex_mem_regs.alu_output;
+                    when others        => null;
+                end if;
+            end if;
         end if;
     end process pc_proc;
 
@@ -90,11 +127,23 @@ begin
     ------------------------------
     ------------------------------
 
+    -- print some decoded information when simulating
+    print_decode : if g_for_sim = true generate
+        -- purpose: Print out information about decoded instruction
+        -- type   : combinational
+        -- inputs : id_decoded
+        -- outputs: 
+        print_decode_proc : process (id_decoded) is
+        begin  -- process print_decode_proc
+            print (id_decoded.insn_type);
+            print (if_id_regs.ir);
+        end process print_decode_proc;
+    end generate print_decode;
+
     instruction_decoder : entity work.riscv_decoder(Behavioral)
         port map (insn    => if_id_regs.ir,
                   decoded => id_decoded);
 
-    -- Instantiate the register file
     register_file : entity work.regfile(Behavioral)
         port map (clk   => clk,
                   rst_n => rst_n,
@@ -169,6 +218,8 @@ begin
                   op2            => ex_op2,
                   compare_result => ex_compare_result);
 
+
+
     -- purpose: Create the EX/MEM pipeline registers
     -- type   : sequential
     -- inputs : clk, rst_n
@@ -182,8 +233,13 @@ begin
             ex_mem_regs.load_pc <= '0';
 
             -- pipeline registers
-            ex_mem_regs.alu_output <= ex_alu_output;
+            ex_mem_regs.alu_output     <= ex_alu_output;
             ex_mem_regs.jump_back_addr <= ex_jump_back_addr;
+            ex_mem_regs.npc            <= id_ex_regs.npc;
+            ex_mem_regs.load_type      <= id_ex_regs.load_type;
+            ex_mem_regs.store_type     <= id_ex_regs.store_type;
+            ex_mem_regs.rd_addr        <= id_ex_regs.rd_addr;
+            ex_mem_regs.imm            <= id_ex_regs.imm;
 
             if (ex_compare_result = '1' or ex_insn_type = OP_JAL or ex_insn_type = OP_JALR) then
                 ex_mem_regs.load_pc = '1';
@@ -201,6 +257,14 @@ begin
     mem_load_pc      <= ex_mem_regs.load_pc;
     mem_next_pc_addr <= ex_mem_regs.alu_output;
 
+    -- create memory interface
+    mem_data_addr     <= ex_mem_regs.alu_output;
+    mem_data_write_en <= '1' when mem_insn_type = OP_STORE else '0';
+    mem_data_read_en  <= '1' when mem_insn_type = OP_LOAD  else '0';
+    mem_data_out      <= ex_mem_regs.b;
+    mem_data_in       <= data_in;
+    mem_data_in_valid <= data_in_valid;
+
     -- purpose: create pipeline registers between MEM and WB
     -- type   : sequential
     -- inputs : clk, rst_n
@@ -210,20 +274,10 @@ begin
         if rst_n = '0' then             -- asynchronous reset (active low)
             mem_wb_regs <= c_mem_wb_regs_reset;
         elsif rising_edge(clk) then     -- rising clock edge
-            -- defaults
-            mem_wb_regs.ir         <= ex_mem_regs.ir;
             mem_wb_regs.alu_output <= ex_mem_regs.alu_output;
-            mem_wb_regs.rd_en      <= '0';
-            mem_wb_regs.wr_en      <= '0';
-
-            if mem_opcode = c_load then
-                mem_wb_regs.lmd   <= data_in;
-                mem_wb_regs.rd_en <= '1';
-            elsif mem_opcode = c_store then
-                mem_wb_regs.data_out_addr <= ex_mem_regs.alu_output;
-                mem_wb_regs.data_out      <= ex_mem_regs.b;
-                mem_wb_regs.wr_en         <= '1';
-            end if;
+            mem_wb_regs.rf_wr_en   <= ex_mem_regs.rf_wr_en;
+            mem_wb_regs.insn_type  <= ex_mem_regs.insn_type;
+            mem_wb_regs.rf_wr_addr <= ex_mem_regs.rf_wr_addr;
         end if;
     end process mem_wb_regs;
 
@@ -233,12 +287,19 @@ begin
     ---------------------
     ---------------------
 
+    rf_wr_addr <= mem_wb_regs.rf_wr_addr;
+    rf_wr_en   <= '1' when (mem_wb_regs.insn_type = OP_ALU or mem_wb_regs.insn_type = OP_LOAD) else '0';
+
     -- purpose: perform register file writeback
     -- type   : combinational
     -- inputs : mem_wb_regs
     -- outputs: register file signals
     writeback_proc : process (mem_wb_regs) is
     begin  -- process writeback_proc
+        if wb_insn_type = OP_LOAD then
+            rf_addrw <= mem
+        end if;
+
         if write_to_rd then
             rf_addrw <= mem_wb_regs.ir(RD);
             rf_wdata <= mem_wb_regs.alu_output;
