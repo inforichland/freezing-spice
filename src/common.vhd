@@ -1,5 +1,6 @@
 library ieee;
 use ieee.std_logic_1164.all;
+use ieee.numeric_std.all;
 use std.textio.all;
 
 package common is
@@ -19,32 +20,45 @@ package common is
     -- pipeline registers between IF and ID stages
     type if_id_regs_t is record
         ir  : word;                     -- instruction register
-        npc : word;                     -- PC pipeline register
+        npc : unsigned(31 downto 0);                     -- PC pipeline register
     end record if_id_regs_t;
 
     -- pipeline registers between ID and EX stages
     type id_ex_regs_t is record
         rs1_data    : word;
         rs2_data    : word;
-        npc         : word;
+        npc         : unsigned(31 downto 0);
         alu_func    : alu_func_t;
         op2_src     : op2_src_t;
         insn_type   : insn_type_t;
         branch_type : branch_type_t;
         load_type   : load_type_t;
         store_type  : store_type_t;
-        rd_addr     : std_logic_vector(4 downto 0);
+        rf_wr_addr  : std_logic_vector(4 downto 0);
         imm         : word;
+        rf_wr_en    : std_logic;
     end record id_ex_regs_t;
 
     -- pipeline registers between EX and MEM stages
     type ex_mem_regs_t is record
-        lmd     : word;
-        load_pc : std_logic;
-        npc     : word;
-        ir      : word;
-        b       : word;
+        lmd        : word;
+        load_pc    : std_logic;
+        npc        : unsigned(31 downto 0);
+        load_type  : load_type_t;
+        store_type : store_type_t;
+        rf_wr_addr : std_logic_vector(4 downto 0);
+        imm        : word;
+        alu_output : word;
+        rf_wr_en   : std_logic;
+        insn_type  : insn_type_t;
     end record ex_mem_regs_t;
+
+    type mem_wb_regs_t is record
+        alu_output : word;
+        rf_wr_en   : std_logic;
+        insn_type  : insn_type_t;
+        rf_wr_addr : std_logic_vector(4 downto 0);
+    end record mem_wb_regs_t;
 
     -- constants
     constant c_if_id_regs_reset : if_id_regs_t := (ir  => (others => '0'),
@@ -59,8 +73,25 @@ package common is
                                                    branch_type => BRANCH_NONE,
                                                    load_type   => LOAD_NONE,
                                                    store_type  => STORE_NONE,
-                                                   rd_addr     => "00000", 
-                                                   imm         => (others => '0'));
+                                                   rf_wr_addr  => "00000",
+                                                   imm         => (others => '0'),
+                                                   rf_wr_en    => '0');
+
+    constant c_ex_mem_regs_reset : ex_mem_regs_t := (lmd        => (others => '0'),
+                                                     load_pc    => '0',
+                                                     npc        => (others => '0'),
+                                                     load_type  => LOAD_NONE,
+                                                     store_type => STORE_NONE,
+                                                     rf_wr_addr => "00000",
+                                                     imm        => (others => '0'),
+                                                     alu_output => (others => '0'),
+                                                     rf_wr_en   => '0',
+                                                     insn_type  => OP_ILLEGAL);
+
+    constant c_mem_wb_regs_reset : mem_wb_regs_t := (alu_output => (others => '0'),
+                                                     rf_wr_en   => '0',
+                                                     insn_type  => OP_ILLEGAL,
+                                                     rf_wr_addr => "00000");
 
     -- print a string with a newline
     procedure println (str : in string);
