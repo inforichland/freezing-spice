@@ -10,6 +10,8 @@ entity decoder is
 end entity decoder;
 
 architecture behavioral of decoder is
+    -- Enumerated types
+    type imm_type_t is (IMM_NONE, IMM_I, IMM_S, IMM_B, IMM_U, IMM_J);
 begin  -- architecture behavioral
 
     -- purpose: decode the RISCV instruction
@@ -31,7 +33,7 @@ begin  -- architecture behavioral
         decoded.rs1_rd     <= '0';
         decoded.rs2_rd     <= '0';
         decoded.alu_func   <= ALU_NONE;
-        decoded.op2_src    <= OP2_REG;
+        decoded.op2_src    <= '0';
         decoded.insn_type  <= OP_ILLEGAL;
         decoded.load_type  <= LOAD_NONE;
         decoded.store_type <= STORE_NONE;
@@ -110,7 +112,7 @@ begin  -- architecture behavioral
             -- perform computation with immediate value and a register
             when c_op_imm =>
                 decoded.insn_type <= OP_ALU;
-                decoded.op2_src   <= OP2_IMM;
+                decoded.op2_src   <= '1';
                 imm_type          := IMM_I;
                 decoded.rs1_rd    <= '1';
 

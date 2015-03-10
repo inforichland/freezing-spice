@@ -7,101 +7,60 @@ package common is
     -- definition for a machine word
     subtype word is std_logic_vector(31 downto 0);
 
-    -- Enumerated types
-    type alu_func_t is (ALU_NONE, ALU_ADD, ALU_ADDU, ALU_SUB, ALU_SUBU, ALU_SLT, ALU_SLTU, ALU_AND, ALU_OR, ALU_XOR, ALU_SLL, ALU_SRA, ALU_SRL);
-    type op1_src_t is (OP1_REG, OP1_NPC);
-    type op2_src_t is (OP2_REG, OP2_IMM);
-    type insn_type_t is (OP_ILLEGAL, OP_LUI, OP_AUIPC, OP_JAL, OP_JALR, OP_BRANCH, OP_LOAD, OP_STORE, OP_ALU);
-    type imm_type_t is (IMM_NONE, IMM_I, IMM_S, IMM_B, IMM_U, IMM_J);
-    type branch_type_t is (BRANCH_NONE, BEQ, BNE, BLT, BGE, BLTU, BGEU);
-    type load_type_t is (LOAD_NONE, LB, LH, LW, LBU, LHU);
-    type store_type_t is (STORE_NONE, SB, SH, SW);
+    subtype imm_type_t is std_logic_vector(2 downto 0);
 
-    -- pipeline registers between IF and ID stages
-    type if_id_regs_t is record
-        ir  : word;                     -- instruction register
-        npc : unsigned(31 downto 0);    -- PC pipeline register
-    end record if_id_regs_t;
+    subtype alu_func_t is std_logic_vector(3 downto 0);
+    constant ALU_NONE : alu_func_t := "0000";
+    constant ALU_ADD  : alu_func_t := "0001";
+    constant ALU_ADDU : alu_func_t := "0010";
+    constant ALU_SUB  : alu_func_t := "0011";
+    constant ALU_SUBU : alu_func_t := "0100";
+    constant ALU_SLT  : alu_func_t := "0101";
+    constant ALU_SLTU : alu_func_t := "0110";
+    constant ALU_AND  : alu_func_t := "0111";
+    constant ALU_OR   : alu_func_t := "1000";
+    constant ALU_XOR  : alu_func_t := "1001";
+    constant ALU_SLL  : alu_func_t := "1010";
+    constant ALU_SRA  : alu_func_t := "1011";
+    constant ALU_SRL  : alu_func_t := "1100";
 
-    -- pipeline registers between ID and EX stages
-    type id_ex_regs_t is record
-        rs1_data    : word;
-        rs2_data    : word;
-        npc         : unsigned(31 downto 0);
-        alu_func    : alu_func_t;
-        op2_src     : op2_src_t;
-        insn_type   : insn_type_t;
-        branch_type : branch_type_t;
-        load_type   : load_type_t;
-        store_type  : store_type_t;
-        rf_wr_addr  : std_logic_vector(4 downto 0);
-        imm         : word;
-        rf_wr_en    : std_logic;
-    end record id_ex_regs_t;
+    subtype insn_type_t is std_logic_vector(3 downto 0);
+    constant OP_ILLEGAL : insn_type_t := "0000";
+    constant OP_LUI     : insn_type_t := "0001";
+    constant OP_AUIPC   : insn_type_t := "0010";
+    constant OP_JAL     : insn_type_t := "0011";
+    constant OP_JALR    : insn_type_t := "0100";
+    constant OP_BRANCH  : insn_type_t := "0101";
+    constant OP_LOAD    : insn_type_t := "0110";
+    constant OP_STORE   : insn_type_t := "0111";
+    constant OP_ALU     : insn_type_t := "1000";
 
-    -- pipeline registers between EX and MEM stages
-    type ex_mem_regs_t is record
-        jump_addr  : word;
-        lmd        : word;
-        load_pc    : std_logic;
-        npc        : unsigned(31 downto 0);
-        load_type  : load_type_t;
-        store_type : store_type_t;
-        rf_wr_addr : std_logic_vector(4 downto 0);
-        rf_wr_data : word;
-        rf_wr_en   : std_logic;
-        imm        : word;
-        alu_output : word;
-        insn_type  : insn_type_t;
-    end record ex_mem_regs_t;
+    subtype branch_type_t is std_logic_vector(2 downto 0);
+    constant BRANCH_NONE : branch_type_t := "000";
+    constant BEQ : branch_type_t := "001";
+    constant BNE : branch_type_t := "010";
+    constant BLT : branch_type_t := "011";
+    constant BGE : branch_type_t := "100";
+    constant BLTU : branch_type_t := "101";
+    constant BGEU : branch_type_t := "110";
 
-    type mem_wb_regs_t is record
-        alu_output : word;
-        rf_wr_en   : std_logic;
-        insn_type  : insn_type_t;
-        rf_wr_addr : std_logic_vector(4 downto 0);
-        lmd        : word;
-    end record mem_wb_regs_t;
+    subtype load_type_t is std_logic_vector(2 downto 0);
+    constant LOAD_NONE : load_type_t := "000";
+    constant LB : load_type_t := "001";
+    constant LH : load_type_t := "010";
+    constant LW : load_type_t := "011";
+    constant LBU : load_type_t := "100";
+    constant LHU : load_type_t := "101";
 
-    -- constants
-    constant c_if_id_regs_reset : if_id_regs_t := (ir  => (others => '0'),
-                                                   npc => (others => '0'));
-
-    constant c_id_ex_regs_reset : id_ex_regs_t := (rs1_data    => (others => '0'),
-                                                   rs2_data    => (others => '0'),
-                                                   npc         => (others => '0'),
-                                                   alu_func    => ALU_NONE,
-                                                   op2_src     => OP2_REG,
-                                                   insn_type   => OP_ILLEGAL,
-                                                   branch_type => BRANCH_NONE,
-                                                   load_type   => LOAD_NONE,
-                                                   store_type  => STORE_NONE,
-                                                   rf_wr_addr  => "00000",
-                                                   imm         => (others => '0'),
-                                                   rf_wr_en    => '0');
-
-    constant c_ex_mem_regs_reset : ex_mem_regs_t := (lmd        => (others => '0'),
-                                                     load_pc    => '0',
-                                                     jump_addr  => (others => '0'),
-                                                     rf_wr_data => (others => '0'),
-                                                     npc        => (others => '0'),
-                                                     load_type  => LOAD_NONE,
-                                                     store_type => STORE_NONE,
-                                                     rf_wr_addr => "00000",
-                                                     imm        => (others => '0'),
-                                                     alu_output => (others => '0'),
-                                                     rf_wr_en   => '0',
-                                                     insn_type  => OP_ILLEGAL);
-
-    constant c_mem_wb_regs_reset : mem_wb_regs_t := (alu_output => (others => '0'),
-                                                     rf_wr_en   => '0',
-                                                     insn_type  => OP_ILLEGAL,
-                                                     rf_wr_addr => "00000",
-                                                     lmd        => (others => '0'));
+    subtype store_type_t is std_logic_vector(1 downto 0);
+    constant STORE_NONE : store_type_t := "00";
+    constant SB : store_type_t := "01";
+    constant SH : store_type_t := "10";
+    constant SW : store_type_t := "11";
 
     -- print a string with a newline
     procedure println (str : in string);
-    procedure print (slv       : in std_logic_vector);
+    procedure print (slv   : in std_logic_vector);
 
     -- instruction formats
     type r_insn_t is (R_ADD, R_SLT, R_SLTU, R_AND, R_OR, R_XOR, R_SLL, R_SRL, R_SUB, R_SRA);

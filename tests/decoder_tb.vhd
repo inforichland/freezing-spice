@@ -18,7 +18,7 @@ architecture testbench of decoder_tb is
                              r_insn      : in r_insn_t;
                              rs1, rs2, d : in std_logic_vector(4 downto 0)) is
     begin
-        print(insn_type);
+        print_insn(insn_type);
         assert decoded.insn_type = insn_type report "Invalid instruction type" severity error;
         case (r_insn) is
             when R_ADD  => assert decoded.alu_func = ALU_ADD report "Invalid ALU function" severity error;
@@ -40,7 +40,7 @@ architecture testbench of decoder_tb is
         imm       : in word;
         rd        : in std_logic_vector(4 downto 0)) is
     begin
-        print(insn_type);
+        print_insn(insn_type);
         assert decoded.insn_type = insn_type report "Invalid instruction type" severity error;
         assert decoded.imm = imm report "Invalid Immediate Value" severity error;
         assert decoded.rd = rd report "Invalid Rd" severity error;
@@ -52,7 +52,7 @@ architecture testbench of decoder_tb is
         imm       : in word;
         rd        : in std_logic_vector(4 downto 0)) is
     begin  -- procedure verify_uj_type
-        print(insn_type);
+        print_insn(insn_type);
         assert decoded.insn_type = insn_type report "Invalid instruction type" severity error;
         assert decoded.imm = imm report "Invalid immediate" severity error;
         assert decoded.rd = rd report "Invalid Rd" severity error;
@@ -64,7 +64,7 @@ architecture testbench of decoder_tb is
                              imm       : in word;
                              rs1, rd   : in std_logic_vector(4 downto 0)) is
     begin  -- procedure verify_i_type
-        print(insn_type);
+        print_insn(insn_type);
         assert decoded.insn_type = insn_type report "Invalid instruction type" severity error;
         assert decoded.imm = imm report "Invalid immediate" severity error;
         assert decoded.rs1 = rs1 report "Invalid Rs1" severity error;
@@ -100,7 +100,7 @@ architecture testbench of decoder_tb is
                              imm       : in word;
                              rs1, rs2  : in std_logic_vector(4 downto 0)) is
     begin
-        print(insn_type);
+        print_insn(insn_type);
         assert decoded.insn_type = insn_type report "Invalid instruction type" severity error;
         assert decoded.imm = imm report "" severity error;
         assert decoded.rs1 = rs1 report "Invalid Rs1" severity error;
@@ -120,7 +120,7 @@ architecture testbench of decoder_tb is
         branch_type : in branch_type_t;
         rs1, rs2    : in std_logic_vector(4 downto 0)) is
     begin  -- procedure verify_sb_type
-        print(insn_type);
+        print_insn(insn_type);
         assert decoded.insn_type = insn_type report "Invalid instruction type" severity error;
         assert decoded.imm = imm report "Invalid immediate" severity error;
         assert decoded.branch_type = branch_type report "Invalid branch type" severity error;

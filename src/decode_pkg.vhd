@@ -1,3 +1,4 @@
+
 library ieee;
 use ieee.std_logic_1164.all;
 use std.textio.all;
@@ -8,7 +9,7 @@ package decode_pkg is
     -- structure for decoded instruction    
     type decoded_t is record
         alu_func    : alu_func_t;
-        op2_src     : op2_src_t;
+        op2_src     : std_logic;
         insn_type   : insn_type_t;
         branch_type : branch_type_t;
         load_type   : load_type_t;
@@ -23,7 +24,7 @@ package decode_pkg is
     end record decoded_t;
 
     constant c_decoded_reset : decoded_t := (alu_func    => ALU_NONE,
-                                             op2_src     => OP2_REG,
+                                             op2_src     => '0',
                                              insn_type   => OP_ILLEGAL,
                                              branch_type => BRANCH_NONE,
                                              load_type   => LOAD_NONE,
@@ -49,13 +50,13 @@ package decode_pkg is
     constant c_op_jal      : std_logic_vector(6 downto 0) := "1101111";
     constant c_op_system   : std_logic_vector(6 downto 0) := "1110011";
 
-    procedure print (insn_type : in insn_type_t);
+    procedure print_insn (insn_type : in insn_type_t);
     
 end package decode_pkg;
 
 package body decode_pkg is
 
-    procedure print (insn_type : in insn_type_t) is
+    procedure print_insn (insn_type : in insn_type_t) is
         variable l : line;
     begin
         write(l, string'("Instruction type: "));
@@ -87,6 +88,6 @@ package body decode_pkg is
             write(l, string'("ILLEGAL"));
             writeline(output, l);
         end if;
-    end procedure print;
+    end procedure print_insn;
 
 end package body decode_pkg;
