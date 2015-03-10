@@ -40,6 +40,7 @@ begin  -- architecture behavioral
         decoded.imm        <= (others => '0');
         decoded.rs1_rd     <= '0';
         decoded.rs2_rd     <= '0';
+        decoded.use_imm    <= '0';
 
         case (opcode) is
             -- Load Upper Immediate
@@ -115,6 +116,7 @@ begin  -- architecture behavioral
                 decoded.op2_src   <= '1';
                 imm_type          := IMM_I;
                 decoded.rs1_rd    <= '1';
+                decoded.use_imm   <= '1';
 
                 case (funct3) is
                     when "000" => decoded.alu_func <= ALU_ADD;

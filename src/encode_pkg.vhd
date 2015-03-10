@@ -63,7 +63,7 @@ package body encode_pkg is
         return result;
     end function encode_u_type;
 
-                                        -- purpose: encode an R-type instruction
+    -- purpose: encode an R-type instruction
     function encode_r_type (insn_type    : r_insn_t;
                             rs1, rs2, rd : register_t)
         return word is
@@ -108,7 +108,7 @@ package body encode_pkg is
         return result;
     end function encode_r_type;
 
-                                        -- purpose: encode a UJ-type instruction
+    -- purpose: encode a UJ-type instruction
     function encode_uj_type (
         insn_type : uj_insn_t;
         imm       : std_logic_vector(20 downto 1);
@@ -127,7 +127,7 @@ package body encode_pkg is
         return result;
     end function encode_uj_type;
 
-                                        -- purpose: encode an I-type instruction (for shifts only)
+    -- purpose: encode an I-type instruction (for shifts only)
     function encode_i_shift (
         i_insn  : i_insn_t;
         shamt   : std_logic_vector(4 downto 0);
@@ -155,7 +155,7 @@ package body encode_pkg is
         return result;
     end function encode_i_shift;
 
-                                        -- purpose: encode an I-type instruction
+    -- purpose: encode an I-type instruction
     function encode_i_type (insn_type : i_insn_t;
                             imm       : std_logic_vector(11 downto 0);
                             rs1, rd   : register_t)
@@ -208,7 +208,7 @@ package body encode_pkg is
         return result;
     end function encode_i_type;
 
-                                        -- purpose: encode an S-type instruction
+    -- purpose: encode an S-type instruction
     function encode_s_type (insn_type : s_insn_t;
                             imm       : std_logic_vector(11 downto 0);
                             rs1, rs2  : register_t)
@@ -228,7 +228,7 @@ package body encode_pkg is
         return result;
     end function encode_s_type;
 
-                                        -- encode an SB-type instruction
+    -- encode an SB-type instruction
     function encode_sb_type (insn_type : sb_insn_t;
                              imm       : std_logic_vector(12 downto 1);
                              rs1, rs2  : register_t)

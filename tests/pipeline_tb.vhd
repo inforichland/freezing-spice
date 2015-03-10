@@ -28,11 +28,37 @@ architecture testbench of pipeline_tb is
 
     signal done         : boolean := false;
     constant clk_period : time    := 10 ns;  -- 100 MHz
+
+    type ram_t is array (0 to 31) of word;
+    constant ram : ram_t := (0 => encode_i_type(I_ADDI, "000000000100", 0, 1),
+                           4 => encode_i_type(I_ADDI, "000000001000", 0, 2),
+                           8 => encode_r_type(R_ADD, 1, 2, 3),
+                           16 => encode_i_shift(I_SLLI, "00001", 3, 3),
+                           others => (others => '0'));
+    
 begin  -- architecture testbench
 
     -- create a clock
     clk <= '0' when done else (not clk) after clk_period / 2;
 
+    -- purpose: provide 1-wait state RAM
+    -- type   : sequential
+    ram_proc: process (clk) is
+    begin  -- process ram_proc
+        if rst_n = '0' then
+            insn_in <= (others => '0');
+            insn_valid <= '0';
+        elsif rising_edge(clk) then
+            if (to_integer(unsigned(insn_addr)) < to_integer(to_unsigned(32, 32))) then
+                insn_in <= ram(to_integer(unsigned(insn_addr)));
+                insn_valid <= '1';
+            else
+                insn_in <= (others => '0');
+                insn_valid <= '0';
+            end if;
+        end if;
+    end process ram_proc;
+    
     -- instantiate the unit under test
     uut : entity work.pipeline(Behavioral)
         generic map (
@@ -55,26 +81,28 @@ begin  -- architecture testbench
     -- type   : combinational
     stimulus_proc : process is
     begin  -- process stimulus_proc
-        -- reset sequence
+        -- reset sequence        
         println ("Beginning simulation");
+
         rst_n <= '0';
-        println ("in reset");
---        wait for clk_period;
         wait for clk_period * 10;
         rst_n <= '1';
-        println ("out of reset");
         
         -- begin stimulus
-        insn_valid <= '1';
-        insn_in    <= encode_i_type(I_ADDI, "000000000100", 0, 1);
         wait for clk_period;
         println ("Sent first instruction");
 
-        insn_in    <= encode_i_type(I_ADDI, "000000001000", 0, 2);
         wait for clk_period;
-        insn_valid <= '0';
+        println ("Sent 2nd instruction");
 
-        wait for clk_period * 6;
+        wait for clk_period;
+        println ("Send 3rd instruction");
+
+        wait for clk_period;
+        println ("Sent 4th instruction");
+
+        -- flush the pipeline
+        wait for clk_period * 20;
 
         -- finished with simulation
         ----------------------------------------------------------------

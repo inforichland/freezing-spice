@@ -23,6 +23,11 @@ begin  -- architecture behavioral
         variable so1, so2 : signed(31 downto 0);
         variable uo1, uo2 : unsigned(31 downto 0);
     begin  -- process alu_proc
+        so1 := signed(op1);
+        so2 := signed(op2);
+        uo1 := unsigned(op1);
+        uo2 := unsigned(op2);
+        
         case (alu_func) is
             when ALU_ADD  => result <= std_logic_vector(so1 + so2);
             when ALU_ADDU => result <= std_logic_vector(uo1 + uo2);
