@@ -22,14 +22,22 @@ begin  -- architecture behavioral
         variable imm_type : imm_type_t := IMM_NONE;
     begin  -- process decode_proc
         -- defaults & important fields
-        opcode         := insn(6 downto 0);
-        funct3         := insn(14 downto 12);
-        decoded.rs1    <= insn(19 downto 15);
-        decoded.rs2    <= insn(24 downto 20);
-        decoded.rd     <= insn(11 downto 7);
-        decoded.opcode <= opcode;
-        decoded.rs1_rd <= '0';
-        decoded.rs2_rd <= '0';
+        opcode             := insn(6 downto 0);
+        funct3             := insn(14 downto 12);
+        decoded.rs1        <= insn(19 downto 15);
+        decoded.rs2        <= insn(24 downto 20);
+        decoded.rd         <= insn(11 downto 7);
+        decoded.opcode     <= opcode;
+        decoded.rs1_rd     <= '0';
+        decoded.rs2_rd     <= '0';
+        decoded.alu_func   <= ALU_NONE;
+        decoded.op2_src    <= OP2_REG;
+        decoded.insn_type  <= OP_ILLEGAL;
+        decoded.load_type  <= LOAD_NONE;
+        decoded.store_type <= STORE_NONE;
+        decoded.imm        <= (others => '0');
+        decoded.rs1_rd     <= '0';
+        decoded.rs2_rd     <= '0';
 
         case (opcode) is
             -- Load Upper Immediate

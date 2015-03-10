@@ -50,7 +50,6 @@ package decode_pkg is
     constant c_op_system   : std_logic_vector(6 downto 0) := "1110011";
 
     procedure print (insn_type : in insn_type_t);
-    procedure print (slv       : in std_logic_vector);
     
 end package decode_pkg;
 
@@ -88,23 +87,6 @@ package body decode_pkg is
             write(l, string'("ILLEGAL"));
             writeline(output, l);
         end if;
-    end procedure print;
-
-    procedure print (slv : in std_logic_vector) is
-        variable l : line;
-    begin  -- procedure print
-        for i in slv'range loop
-            if slv(i) = '0' then
-                write(l, string'("0"));
-            elsif slv(i) = '1' then
-                write(l, string'("1"));
-            elsif slv(i) = 'X' then
-                write(l, string'("X"));
-            elsif slv(i) = 'U' then
-                write(l, string'("U"));
-            end if;
-        end loop;  -- i
-        writeline(output, l);
     end procedure print;
 
 end package body decode_pkg;

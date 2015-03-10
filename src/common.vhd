@@ -20,7 +20,7 @@ package common is
     -- pipeline registers between IF and ID stages
     type if_id_regs_t is record
         ir  : word;                     -- instruction register
-        npc : unsigned(31 downto 0);                     -- PC pipeline register
+        npc : unsigned(31 downto 0);    -- PC pipeline register
     end record if_id_regs_t;
 
     -- pipeline registers between ID and EX stages
@@ -41,15 +41,17 @@ package common is
 
     -- pipeline registers between EX and MEM stages
     type ex_mem_regs_t is record
+        jump_addr  : word;
         lmd        : word;
         load_pc    : std_logic;
         npc        : unsigned(31 downto 0);
         load_type  : load_type_t;
         store_type : store_type_t;
         rf_wr_addr : std_logic_vector(4 downto 0);
+        rf_wr_data : word;
+        rf_wr_en   : std_logic;
         imm        : word;
         alu_output : word;
-        rf_wr_en   : std_logic;
         insn_type  : insn_type_t;
     end record ex_mem_regs_t;
 
@@ -58,6 +60,7 @@ package common is
         rf_wr_en   : std_logic;
         insn_type  : insn_type_t;
         rf_wr_addr : std_logic_vector(4 downto 0);
+        lmd        : word;
     end record mem_wb_regs_t;
 
     -- constants
@@ -79,6 +82,8 @@ package common is
 
     constant c_ex_mem_regs_reset : ex_mem_regs_t := (lmd        => (others => '0'),
                                                      load_pc    => '0',
+                                                     jump_addr  => (others => '0'),
+                                                     rf_wr_data => (others => '0'),
                                                      npc        => (others => '0'),
                                                      load_type  => LOAD_NONE,
                                                      store_type => STORE_NONE,
@@ -91,10 +96,12 @@ package common is
     constant c_mem_wb_regs_reset : mem_wb_regs_t := (alu_output => (others => '0'),
                                                      rf_wr_en   => '0',
                                                      insn_type  => OP_ILLEGAL,
-                                                     rf_wr_addr => "00000");
+                                                     rf_wr_addr => "00000",
+                                                     lmd        => (others => '0'));
 
     -- print a string with a newline
     procedure println (str : in string);
+    procedure print (slv       : in std_logic_vector);
 
     -- instruction formats
     type r_insn_t is (R_ADD, R_SLT, R_SLTU, R_AND, R_OR, R_XOR, R_SLL, R_SRL, R_SUB, R_SRA);
@@ -115,5 +122,22 @@ package body common is
         write(l, str);
         writeline(output, l);
     end procedure println;
+
+    procedure print (slv : in std_logic_vector) is
+        variable l : line;
+    begin  -- procedure print
+        for i in slv'range loop
+            if slv(i) = '0' then
+                write(l, string'("0"));
+            elsif slv(i) = '1' then
+                write(l, string'("1"));
+            elsif slv(i) = 'X' then
+                write(l, string'("X"));
+            elsif slv(i) = 'U' then
+                write(l, string'("U"));
+            end if;
+        end loop;  -- i
+        writeline(output, l);
+    end procedure print;
     
 end package body common;
