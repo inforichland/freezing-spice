@@ -1,6 +1,7 @@
 library ieee;
 use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
+use std.textio.all;
 
 use work.common.all;
 use work.decode_pkg.all;
@@ -27,7 +28,10 @@ entity pipeline is
 end entity;
 
 architecture Behavioral of pipeline is
-
+    -- constants
+    constant PC_SEQ        : std_logic_vector(1 downto 0) := "11";
+    constant PC_JALR       : std_logic_vector(1 downto 0) := "01";
+    constant PC_BRANCH_JAL : std_logic_vector(1 downto 0) := "10";
 
     -- pipeline registers between IF and ID stages
     signal if_id_regs_ir  : word                  := (others => '0');
@@ -49,18 +53,19 @@ architecture Behavioral of pipeline is
     signal id_ex_regs_use_imm     : std_logic                    := '0';
 
     -- pipeline registers between EX and MEM stages
-    signal ex_mem_regs_jump_addr  : word                         := (others => '0');
-    signal ex_mem_regs_lmd        : word                         := (others => '0');
-    signal ex_mem_regs_load_pc    : std_logic                    := '0';
-    signal ex_mem_regs_npc        : unsigned(31 downto 0)        := (others => '0');
-    signal ex_mem_regs_load_type  : load_type_t                  := LOAD_NONE;
-    signal ex_mem_regs_store_type : store_type_t                 := STORE_NONE;
-    signal ex_mem_regs_rf_wr_addr : std_logic_vector(4 downto 0) := "00000";
-    signal ex_mem_regs_rf_wr_data : word                         := (others => '0');
-    signal ex_mem_regs_rf_wr_en   : std_logic                    := '0';
-    signal ex_mem_regs_imm        : word                         := (others => '0');
-    signal ex_mem_regs_alu_output : word                         := (others => '0');
-    signal ex_mem_regs_insn_type  : insn_type_t                  := OP_ILLEGAL;
+    signal ex_mem_regs_jump_addr    : word                         := (others => '0');
+    signal ex_mem_regs_lmd          : word                         := (others => '0');
+    signal ex_mem_regs_load_pc      : std_logic                    := '0';
+    signal ex_mem_regs_npc          : unsigned(31 downto 0)        := (others => '0');
+    signal ex_mem_regs_load_type    : load_type_t                  := LOAD_NONE;
+    signal ex_mem_regs_store_type   : store_type_t                 := STORE_NONE;
+    signal ex_mem_regs_rf_wr_addr   : std_logic_vector(4 downto 0) := "00000";
+    signal ex_mem_regs_rf_wr_data   : word                         := (others => '0');
+    signal ex_mem_regs_rf_wr_en     : std_logic                    := '0';
+    signal ex_mem_regs_imm          : word                         := (others => '0');
+    signal ex_mem_regs_alu_output   : word                         := (others => '0');
+    signal ex_mem_regs_insn_type    : insn_type_t                  := OP_ILLEGAL;
+    signal ex_mem_regs_next_pc_addr : word                         := (others => '0');
 
     -- pipeline registers between MEM and WB stages
     signal mem_wb_regs_alu_output : word                         := (others => '0');
@@ -69,23 +74,19 @@ architecture Behavioral of pipeline is
     signal mem_wb_regs_rf_wr_addr : std_logic_vector(4 downto 0) := "00000";
     signal mem_wb_regs_lmd        : word                         := (others => '0');
 
-    -- types
-    type next_pc_sel_t is (PC_SEQ, PC_BRANCH_JAL, PC_JALR);
-
     -- architectural registers
-    signal pc : unsigned(31 downto 0) := g_initial_pc;  -- Program Counter
+    signal pc      : unsigned(31 downto 0) := g_initial_pc;  -- Program Counter
+    signal next_pc : unsigned(31 downto 0);
 
     -- stall signals
     signal hazard_stall : std_logic;
     signal cache_stall  : std_logic := '0';
 
     -- IF signals
-    signal next_pc     : unsigned(31 downto 0);
-    signal next_pc_sel : next_pc_sel_t;
+    signal next_pc_sel : std_logic_vector(1 downto 0);
 
     -- ID signals
     signal id_decoded               : decoded_t;
-    signal id_imm                   : word;
     signal id_rs1_data, id_rs2_data : word;
 
     -- EX signals
@@ -111,8 +112,6 @@ architecture Behavioral of pipeline is
     signal wb_rf_wr_data : word;
     signal wb_rf_wr_addr : std_logic_vector(4 downto 0);
     signal wb_rf_wr_en   : std_logic;
-
-    constant NOP : word := encode_i_type(I_ADDI, "000000000000", 0, 0);  -- no-op
 begin
 
     -- Assign outputs
@@ -122,7 +121,7 @@ begin
 
     -- Determine when to stall the pipeline because of structural hazards
     hazard_stall <= '1' when (((id_ex_regs_rf_wr_addr = id_decoded.rs1) and (id_decoded.rs1 /= "00000") and (id_ex_regs_rf_wr_en = '1') and (id_decoded.rs1_rd = '1'))
-                              or ((ex_mem_regs_rf_wr_addr = id_decoded.rs1) and (id_decoded.rs1 /= "00000") and (ex_mem_regs_rf_wr_en = '1') and (id_decoded.rs1_rd = '1'))
+                               or ((ex_mem_regs_rf_wr_addr = id_decoded.rs1) and (id_decoded.rs1 /= "00000") and (ex_mem_regs_rf_wr_en = '1') and (id_decoded.rs1_rd = '1'))
                               or ((mem_wb_regs_rf_wr_addr = id_decoded.rs1) and (id_decoded.rs1 /= "00000") and (mem_wb_regs_rf_wr_en = '1') and (id_decoded.rs1_rd = '1'))
                               or ((id_ex_regs_rf_wr_addr = id_decoded.rs2) and (id_decoded.rs2 /= "00000") and (id_ex_regs_rf_wr_en = '1') and (id_decoded.rs2_rd = '1'))
                               or ((ex_mem_regs_rf_wr_addr = id_decoded.rs2) and (id_decoded.rs2 /= "00000") and (ex_mem_regs_rf_wr_en = '1') and (id_decoded.rs2_rd = '1'))
@@ -137,9 +136,14 @@ begin
     -----------------------------
     -----------------------------
 
-    next_pc_sel <= PC_BRANCH_JAL when (id_decoded.insn_type = OP_BRANCH or id_decoded.insn_type = OP_JAL) else
-                   PC_JALR when (id_decoded.insn_type = OP_JALR) else
+    next_pc_sel <= PC_BRANCH_JAL when (ex_mem_regs_load_pc = '1' and (ex_mem_regs_insn_type = OP_BRANCH or ex_mem_regs_insn_type = OP_JAL)) else
+                   PC_JALR when (ex_mem_regs_load_pc = '1' and ex_mem_regs_insn_type = OP_JALR) else
                    PC_SEQ;
+
+    next_pc <= pc + to_unsigned(4, 32) when next_pc_sel = PC_SEQ else
+               unsigned(ex_mem_regs_next_pc_addr) when next_pc_sel = PC_BRANCH_JAL else
+               ex_branch_jal_target               when next_pc_sel = PC_JALR else
+               pc;
 
     -- purpose: create the PC register
     -- type   : sequential
@@ -151,12 +155,7 @@ begin
             pc <= g_initial_pc;
         elsif rising_edge(clk) then
             if (hazard_stall = '0') and (cache_stall = '0') then
-                case (next_pc_sel) is
-                    when PC_SEQ        => pc <= pc + to_unsigned(4, 32);
-                    when PC_BRANCH_JAL => pc <= ex_branch_jal_target;
-                    when PC_JALR       => pc <= unsigned(ex_mem_regs_alu_output);
-                    when others        => null;
-                end case;
+                pc <= next_pc;
             end if;
         end if;
     end process pc_proc;
@@ -173,7 +172,7 @@ begin
         elsif rising_edge(clk) then     -- rising clock edge
             if (hazard_stall = '0') and (cache_stall = '0') then
                 -- determine when to insert a pipeline bubble
-                if ((next_pc_sel /= PC_SEQ) or (insn_valid = '0')) then
+                if ((id_ex_regs_insn_type = OP_BRANCH) or (id_ex_regs_insn_type = OP_JAL) or (id_ex_regs_insn_type = OP_JALR) or (insn_valid = '0')) then
                     if_id_regs_ir <= NOP;
                 else
                     if_id_regs_ir <= insn_in;
@@ -190,23 +189,6 @@ begin
     -- Instruction decode stage --
     ------------------------------
     ------------------------------
-
-    -- print some decoded information when simulating
-    print_decode : if (g_for_sim = true) generate
-        -- purpose: Print out information about decoded instruction
-        -- type   : combinational
-        -- inputs : id_decoded
-        -- outputs: 
-        print_decode_proc : process (id_decoded) is
-        begin  -- process print_decode_proc
-            if (if_id_regs_ir /= NOP) then
-                print_insn (id_decoded.insn_type);
-                print (if_id_regs_ir);
-            else
-                println ("Instruction type: NOP");
-            end if;
-        end process print_decode_proc;
-    end generate print_decode;
 
     instruction_decoder : entity work.decoder(Behavioral)
         port map (insn    => if_id_regs_ir,
@@ -247,7 +229,9 @@ begin
             id_ex_regs_rf_wr_en <= '0';
 
             if (hazard_stall = '0' and cache_stall = '0') then
-                if (next_pc_sel /= PC_SEQ) then  -- control transfer
+                if (id_ex_regs_branch_type /= BRANCH_NONE or
+                    id_ex_regs_insn_type = OP_JAL or id_ex_regs_insn_type = OP_JALR or
+                    ex_mem_regs_insn_type = OP_JAL or ex_mem_regs_insn_type = OP_JALR) then  -- control transfer - kill the instruction
                     id_ex_regs_rs1_data    <= (others => '0');
                     id_ex_regs_rs2_data    <= (others => '0');
                     id_ex_regs_npc         <= (others => '0');
@@ -277,7 +261,7 @@ begin
                     -- of this instruction
                     if (next_pc_sel = PC_SEQ) then
                         id_ex_regs_rf_wr_addr <= id_decoded.rd;
-                        if (id_decoded.insn_type = OP_ALU or id_decoded.insn_type = OP_LOAD or id_decoded.insn_type = OP_JALR) then
+                        if (id_decoded.insn_type = OP_ALU or id_decoded.insn_type = OP_LOAD or id_decoded.insn_type = OP_JALR or id_decoded.insn_type = OP_JAL) then
                             if (id_decoded.rd /= "00000") then
                                 id_ex_regs_rf_wr_en <= '1';
                             end if;
@@ -285,6 +269,7 @@ begin
                     end if;
                 end if;
             else
+                -- stalled
                 id_ex_regs_rs1_data    <= (others => '0');
                 id_ex_regs_rs2_data    <= (others => '0');
                 id_ex_regs_npc         <= (others => '0');
@@ -300,6 +285,22 @@ begin
             end if;
         end if;
     end process id_ex_regs_proc;
+
+    -- print instructions as they are issued
+    print_decode : if (g_for_sim = true) generate
+        -- purpose: Print out information about decoded instruction
+        -- type   : combinational
+        -- inputs : id_decoded
+        -- outputs: 
+        print_decode_proc : process (id_ex_regs_insn_type, id_ex_regs_npc) is
+            variable l : line;
+        begin  -- process print_decode_proc
+            write(l, id_ex_regs_insn_type);
+            write(l, string'("  : "));
+            write(l, to_integer(id_ex_regs_npc));
+            writeline(output, l);
+        end process print_decode_proc;
+    end generate print_decode;
 
     -------------------
     -------------------
@@ -357,22 +358,30 @@ begin
             ex_mem_regs_insn_type  <= OP_ILLEGAL;
             ex_mem_regs_rf_wr_en   <= '0';
         elsif rising_edge(clk) then     -- rising clock edge
-                                        -- defaults
+            -- defaults
             ex_mem_regs_load_pc <= '0';
 
-                                        -- pipeline registers
-            ex_mem_regs_alu_output <= ex_alu_output;
-            ex_mem_regs_jump_addr  <= std_logic_vector(ex_jump_addr);
-            ex_mem_regs_npc        <= id_ex_regs_npc;
-            ex_mem_regs_load_type  <= id_ex_regs_load_type;
-            ex_mem_regs_store_type <= id_ex_regs_store_type;
-            ex_mem_regs_rf_wr_addr <= id_ex_regs_rf_wr_addr;
-            ex_mem_regs_imm        <= id_ex_regs_imm;
-            ex_mem_regs_insn_type  <= id_ex_regs_insn_type;
-            ex_mem_regs_rf_wr_en   <= id_ex_regs_rf_wr_en;
+            if cache_stall = '0' then
+                -- pipeline registers
+                ex_mem_regs_alu_output <= ex_alu_output;
+                ex_mem_regs_jump_addr  <= std_logic_vector(ex_jump_addr);
+                ex_mem_regs_npc        <= id_ex_regs_npc;
+                ex_mem_regs_load_type  <= id_ex_regs_load_type;
+                ex_mem_regs_store_type <= id_ex_regs_store_type;
+                ex_mem_regs_rf_wr_addr <= id_ex_regs_rf_wr_addr;
+                ex_mem_regs_imm        <= id_ex_regs_imm;
+                ex_mem_regs_insn_type  <= id_ex_regs_insn_type;
+                ex_mem_regs_rf_wr_en   <= id_ex_regs_rf_wr_en;
 
-            if (ex_compare_result = '1' or id_ex_regs_insn_type = OP_JAL or id_ex_regs_insn_type = OP_JALR) then
-                ex_mem_regs_load_pc <= '1';
+                if (id_ex_regs_insn_type = OP_JAL or id_ex_regs_insn_type = OP_BRANCH) then
+                    ex_mem_regs_next_pc_addr <= ex_alu_output;
+                else
+                    ex_mem_regs_next_pc_addr <= ex_mem_regs_jump_addr;
+                end if;
+
+                if (ex_compare_result = '1' or id_ex_regs_insn_type = OP_JAL or id_ex_regs_insn_type = OP_JALR) then
+                    ex_mem_regs_load_pc <= '1';
+                end if;
             end if;
         end if;
     end process ex_mem_regs_proc;
@@ -382,9 +391,6 @@ begin
     -- Memory stage --
     ------------------
     ------------------
-
-    mem_load_pc      <= ex_mem_regs_load_pc;
-    mem_next_pc_addr <= ex_mem_regs_alu_output;
 
     -- create memory interface
     mem_data_addr     <= ex_mem_regs_alu_output;
@@ -406,10 +412,13 @@ begin
             mem_wb_regs_insn_type  <= OP_ILLEGAL;
             mem_wb_regs_rf_wr_addr <= "00000";
         elsif rising_edge(clk) then     -- rising clock edge
-            mem_wb_regs_alu_output <= ex_mem_regs_alu_output;
-            mem_wb_regs_rf_wr_en   <= ex_mem_regs_rf_wr_en;
-            mem_wb_regs_insn_type  <= ex_mem_regs_insn_type;
-            mem_wb_regs_rf_wr_addr <= ex_mem_regs_rf_wr_addr;
+            if cache_stall = '0' then
+                mem_wb_regs_alu_output <= ex_mem_regs_alu_output;
+                mem_wb_regs_rf_wr_en   <= ex_mem_regs_rf_wr_en;
+                mem_wb_regs_insn_type  <= ex_mem_regs_insn_type;
+                mem_wb_regs_rf_wr_addr <= ex_mem_regs_rf_wr_addr;
+            end if;
+
         end if;
     end process mem_wb_regs_proc;
 

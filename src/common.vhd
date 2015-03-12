@@ -61,6 +61,7 @@ package common is
     -- print a string with a newline
     procedure println (str : in string);
     procedure print (slv   : in std_logic_vector);
+    procedure write(l : inout line; slv : in std_logic_vector);
 
     -- instruction formats
     type r_insn_t is (R_ADD, R_SLT, R_SLTU, R_AND, R_OR, R_XOR, R_SLL, R_SRL, R_SUB, R_SRA);
@@ -69,6 +70,9 @@ package common is
     type sb_insn_t is (SB_BEQ, SB_BNE, SB_BLT, SB_BGE, SB_BLTU, SB_BGEU);
     type u_insn_t is (U_LUI, U_AUIPC);
     type uj_insn_t is (UJ_JAL);
+
+    -- ADDI r0, r0, r0
+    constant NOP : word := "00000000000000000000000000010011";
     
 end package common;
 
@@ -82,9 +86,8 @@ package body common is
         writeline(output, l);
     end procedure println;
 
-    procedure print (slv : in std_logic_vector) is
-        variable l : line;
-    begin  -- procedure print
+    procedure write(l : inout line; slv : in std_logic_vector) is
+    begin
         for i in slv'range loop
             if slv(i) = '0' then
                 write(l, string'("0"));
@@ -96,6 +99,12 @@ package body common is
                 write(l, string'("U"));
             end if;
         end loop;  -- i
+    end procedure write;
+    
+    procedure print (slv : in std_logic_vector) is
+        variable l : line;
+    begin  -- procedure print
+        write(l, slv);
         writeline(output, l);
     end procedure print;
     
