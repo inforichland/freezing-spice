@@ -37,31 +37,32 @@ package common is
 
     subtype branch_type_t is std_logic_vector(2 downto 0);
     constant BRANCH_NONE : branch_type_t := "000";
-    constant BEQ : branch_type_t := "001";
-    constant BNE : branch_type_t := "010";
-    constant BLT : branch_type_t := "011";
-    constant BGE : branch_type_t := "100";
-    constant BLTU : branch_type_t := "101";
-    constant BGEU : branch_type_t := "110";
+    constant BEQ         : branch_type_t := "001";
+    constant BNE         : branch_type_t := "010";
+    constant BLT         : branch_type_t := "011";
+    constant BGE         : branch_type_t := "100";
+    constant BLTU        : branch_type_t := "101";
+    constant BGEU        : branch_type_t := "110";
 
     subtype load_type_t is std_logic_vector(2 downto 0);
     constant LOAD_NONE : load_type_t := "000";
-    constant LB : load_type_t := "001";
-    constant LH : load_type_t := "010";
-    constant LW : load_type_t := "011";
-    constant LBU : load_type_t := "100";
-    constant LHU : load_type_t := "101";
+    constant LB        : load_type_t := "001";
+    constant LH        : load_type_t := "010";
+    constant LW        : load_type_t := "011";
+    constant LBU       : load_type_t := "100";
+    constant LHU       : load_type_t := "101";
 
     subtype store_type_t is std_logic_vector(1 downto 0);
     constant STORE_NONE : store_type_t := "00";
-    constant SB : store_type_t := "01";
-    constant SH : store_type_t := "10";
-    constant SW : store_type_t := "11";
+    constant SB         : store_type_t := "01";
+    constant SH         : store_type_t := "10";
+    constant SW         : store_type_t := "11";
 
     -- print a string with a newline
-    procedure println (str : in string);
-    procedure print (slv   : in std_logic_vector);
-    procedure write(l : inout line; slv : in std_logic_vector);
+    procedure println (str : in    string);
+    procedure print (slv   : in    std_logic_vector);
+    procedure write(l      : inout line; slv : in std_logic_vector);
+    function hstr(slv : std_logic_vector) return string;
 
     -- instruction formats
     type r_insn_t is (R_ADD, R_SLT, R_SLTU, R_AND, R_OR, R_XOR, R_SLL, R_SRL, R_SUB, R_SRA);
@@ -77,6 +78,45 @@ package common is
 end package common;
 
 package body common is
+
+    function hstr(slv : std_logic_vector) return string is
+        variable hexlen  : integer;
+        variable longslv : std_logic_vector(67 downto 0) := (others => '0');
+        variable hex     : string(1 to 16);
+        variable fourbit : std_logic_vector(3 downto 0);
+    begin
+        hexlen := (slv'left+1)/4;
+        if (slv'left+1) mod 4 /= 0 then
+            hexlen := hexlen + 1;
+        end if;
+        longslv(slv'left downto 0) := slv;
+        for i in (hexlen -1) downto 0 loop
+            fourbit := longslv(((i*4)+3) downto (i*4));
+            case fourbit is
+                when "0000" => hex(hexlen -I) := '0';
+                when "0001" => hex(hexlen -I) := '1';
+                when "0010" => hex(hexlen -I) := '2';
+                when "0011" => hex(hexlen -I) := '3';
+                when "0100" => hex(hexlen -I) := '4';
+                when "0101" => hex(hexlen -I) := '5';
+                when "0110" => hex(hexlen -I) := '6';
+                when "0111" => hex(hexlen -I) := '7';
+                when "1000" => hex(hexlen -I) := '8';
+                when "1001" => hex(hexlen -I) := '9';
+                when "1010" => hex(hexlen -I) := 'A';
+                when "1011" => hex(hexlen -I) := 'B';
+                when "1100" => hex(hexlen -I) := 'C';
+                when "1101" => hex(hexlen -I) := 'D';
+                when "1110" => hex(hexlen -I) := 'E';
+                when "1111" => hex(hexlen -I) := 'F';
+                when "ZZZZ" => hex(hexlen -I) := 'z';
+                when "UUUU" => hex(hexlen -I) := 'u';
+                when "XXXX" => hex(hexlen -I) := 'x';
+                when others => hex(hexlen -I) := '?';
+            end case;
+        end loop;
+        return hex(1 to hexlen);
+    end hstr;
 
     -- print a string with a newline
     procedure println (str : in string) is
@@ -100,7 +140,7 @@ package body common is
             end if;
         end loop;  -- i
     end procedure write;
-    
+
     procedure print (slv : in std_logic_vector) is
         variable l : line;
     begin  -- procedure print

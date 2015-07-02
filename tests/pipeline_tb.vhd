@@ -27,19 +27,20 @@ architecture testbench of pipeline_tb is
     signal data_read_en  : std_logic;
     signal data_addr     : word;
 
+    -- simulation specific
     signal done         : boolean := false;
     constant clk_period : time    := 10 ns;  -- 100 MHz
 
     -- 0 : 00000000010000000000000010010011   ADDI 4, x0, x1    (400093)
     -- 4 : 00000000100000000000000100010011   ADDI 8, x0, x2    (800113)
     -- 8 : 00000000001000001000000110110011   ADD  x1, x2, x3   (2081B3)
-    --12 : 00000000000100011001000110010011   SLLI 1, x3, x3    (119193)
+    --12 : 00000000000100011001000110010011   SLLI 1, x3, x4    (119213)
     --16 : 00000100000000000000000001101111   JAL  16, x0       (100006F)
     --20 : 00000000000000000000000000010011   NOP               (13)
     --24 : 00000000000000000000000000010011   NOP
     --28 : 00000000000000000000000000010011   NOP
-    --32 : 00000000001100011000000110110011   ADD x3, x3, x3    (3181B3)
-    --36 : 00000000000000000000000000010011   NOP
+    --32 : 00000000001100011000000110110011   ADD  x3, x4, x5   (4182B3)
+    --36 : 00000000000000000000000000010011   JAL  0, x0        (6F)
     type ram_t is array (0 to 63) of word;
     constant ram : ram_t := (0      => encode_i_type(I_ADDI, "000000000100", 0, 1),
                              4      => encode_i_type(I_ADDI, "000000001000", 0, 2),
@@ -50,6 +51,7 @@ architecture testbench of pipeline_tb is
                              24     => NOP,
                              28     => NOP,
                              32     => encode_r_type(R_ADD, 3, 4, 5),
+                             36     => encode_uj_type(UJ_JAL, "00000000000000000000", 0),
                              others => NOP);
 
 begin  -- architecture testbench
@@ -66,7 +68,7 @@ begin  -- architecture testbench
             insn_in    <= (others => '0');
             insn_valid <= '0';
         elsif rising_edge(clk) then            
-            if (to_integer(unsigned(insn_addr)) <= to_integer(to_unsigned(32, 32))) then
+            if (to_integer(unsigned(insn_addr)) <= to_integer(to_unsigned(36, 32))) then
                 insn_in    <= ram(to_integer(unsigned(insn_addr)));
                 insn_valid <= '1';
             else
@@ -74,10 +76,10 @@ begin  -- architecture testbench
                 insn_valid <= '0';
             end if;
 
---            write(l, to_integer(unsigned(insn_addr)));
---            write(l, string'(" : "));
---            write(l, insn_in);
---            writeline(output, l);
+            --write(l, to_integer(unsigned(insn_addr)));
+            --write(l, string'(" : "));
+            --write(l, insn_in);
+            --writeline(output, l);
         end if;
     end process ram_proc;
 
@@ -112,15 +114,7 @@ begin  -- architecture testbench
         rst_n <= '1';
 
         -- begin stimulus
-        wait for clk_period;
-        wait for clk_period;
-        wait for clk_period;
-        wait for clk_period;
-        wait for clk_period;
-        wait for clk_period;
-        
-        -- flush the pipeline
-        wait for clk_period * 12;
+        wait for clk_period * 15;
 
         -- finished with simulation
         ----------------------------------------------------------------

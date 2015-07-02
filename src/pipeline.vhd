@@ -79,8 +79,10 @@ architecture Behavioral of pipeline is
     signal next_pc : unsigned(31 downto 0);
 
     -- stall signals
-    signal hazard_stall : std_logic;
-    signal cache_stall  : std_logic := '0';
+    signal hazard_stall       : std_logic;
+    signal cache_stall        : std_logic := '0';
+    signal branch_stall       : std_logic;
+    signal if_id_branch_stall : std_logic := '0';
 
     -- IF signals
     signal next_pc_sel : std_logic_vector(1 downto 0);
@@ -99,7 +101,7 @@ architecture Behavioral of pipeline is
     signal ex_compare_result    : std_logic;
 
     -- MEM signals
-    signal mem_load_pc       : std_logic;
+--    signal mem_load_pc       : std_logic;
     signal mem_next_pc_addr  : word;
     signal mem_data_addr     : word;
     signal mem_data_write_en : std_logic;
@@ -112,6 +114,9 @@ architecture Behavioral of pipeline is
     signal wb_rf_wr_data : word;
     signal wb_rf_wr_addr : std_logic_vector(4 downto 0);
     signal wb_rf_wr_en   : std_logic;
+
+
+    signal EX_DEBUG_INSN_ISSUE : std_logic := '0';
 begin
 
     -- Assign outputs
@@ -121,7 +126,7 @@ begin
 
     -- Determine when to stall the pipeline because of structural hazards
     hazard_stall <= '1' when (((id_ex_regs_rf_wr_addr = id_decoded.rs1) and (id_decoded.rs1 /= "00000") and (id_ex_regs_rf_wr_en = '1') and (id_decoded.rs1_rd = '1'))
-                               or ((ex_mem_regs_rf_wr_addr = id_decoded.rs1) and (id_decoded.rs1 /= "00000") and (ex_mem_regs_rf_wr_en = '1') and (id_decoded.rs1_rd = '1'))
+                              or ((ex_mem_regs_rf_wr_addr = id_decoded.rs1) and (id_decoded.rs1 /= "00000") and (ex_mem_regs_rf_wr_en = '1') and (id_decoded.rs1_rd = '1'))
                               or ((mem_wb_regs_rf_wr_addr = id_decoded.rs1) and (id_decoded.rs1 /= "00000") and (mem_wb_regs_rf_wr_en = '1') and (id_decoded.rs1_rd = '1'))
                               or ((id_ex_regs_rf_wr_addr = id_decoded.rs2) and (id_decoded.rs2 /= "00000") and (id_ex_regs_rf_wr_en = '1') and (id_decoded.rs2_rd = '1'))
                               or ((ex_mem_regs_rf_wr_addr = id_decoded.rs2) and (id_decoded.rs2 /= "00000") and (ex_mem_regs_rf_wr_en = '1') and (id_decoded.rs2_rd = '1'))
@@ -130,19 +135,22 @@ begin
                               or ((ex_mem_regs_insn_type = OP_LOAD) and (id_ex_regs_rf_wr_addr = id_decoded.rs2) and (id_ex_regs_rf_wr_addr /= "00000") and (id_decoded.rs2_rd = '1')))
                     else '0';
 
+    branch_stall <= '1' when (next_pc_sel /= PC_SEQ) else '0';
+
     -----------------------------
     -----------------------------
     -- Instruction fetch stage --
     -----------------------------
     -----------------------------
 
-    next_pc_sel <= PC_BRANCH_JAL when (ex_mem_regs_load_pc = '1' and (ex_mem_regs_insn_type = OP_BRANCH or ex_mem_regs_insn_type = OP_JAL)) else
+    next_pc_sel <= PC_BRANCH_JAL when ((ex_mem_regs_load_pc = '1') and (ex_mem_regs_insn_type = OP_BRANCH or ex_mem_regs_insn_type = OP_JAL)) else
                    PC_JALR when (ex_mem_regs_load_pc = '1' and ex_mem_regs_insn_type = OP_JALR) else
                    PC_SEQ;
 
     next_pc <= pc + to_unsigned(4, 32) when next_pc_sel = PC_SEQ else
                unsigned(ex_mem_regs_next_pc_addr) when next_pc_sel = PC_BRANCH_JAL else
-               ex_branch_jal_target               when next_pc_sel = PC_JALR else
+               --ex_branch_jal_target               when next_pc_sel = PC_JALR else
+               unsigned(ex_mem_regs_alu_output)   when next_pc_sel = PC_JALR else
                pc;
 
     -- purpose: create the PC register
@@ -154,7 +162,7 @@ begin
         if rst_n = '0' then             -- asynchronous reset (active low)
             pc <= g_initial_pc;
         elsif rising_edge(clk) then
-            if (hazard_stall = '0') and (cache_stall = '0') then
+            if (hazard_stall = '0') and (cache_stall = '0') and (branch_stall = '0') then
                 pc <= next_pc;
             end if;
         end if;
@@ -172,7 +180,8 @@ begin
         elsif rising_edge(clk) then     -- rising clock edge
             if (hazard_stall = '0') and (cache_stall = '0') then
                 -- determine when to insert a pipeline bubble
-                if ((id_ex_regs_insn_type = OP_BRANCH) or (id_ex_regs_insn_type = OP_JAL) or (id_ex_regs_insn_type = OP_JALR) or (insn_valid = '0')) then
+--                if ((id_ex_regs_insn_type = OP_BRANCH) or (id_ex_regs_insn_type = OP_JAL) or (id_ex_regs_insn_type = OP_JALR) or (insn_valid = '0')) then
+                if ((branch_stall = '1') or (insn_valid = '0')) then
                     if_id_regs_ir <= NOP;
                 else
                     if_id_regs_ir <= insn_in;
@@ -180,6 +189,8 @@ begin
 
                 -- pipeline the PC
                 if_id_regs_npc <= pc;
+
+                if_id_branch_stall <= branch_stall;
             end if;
         end if;
     end process if_id_regs_proc;
@@ -224,14 +235,56 @@ begin
             id_ex_regs_imm         <= (others => '0');
             id_ex_regs_rf_wr_addr  <= (others => '0');
             id_ex_regs_use_imm     <= '0';
+            EX_DEBUG_INSN_ISSUE    <= '0';
         elsif rising_edge(clk) then     -- rising clock edge
-            -- default values
-            id_ex_regs_rf_wr_en <= '0';
+                -- default values
+                id_ex_regs_rf_wr_en <= '0';
+                EX_DEBUG_INSN_ISSUE <= '0';
 
-            if (hazard_stall = '0' and cache_stall = '0') then
-                if (id_ex_regs_branch_type /= BRANCH_NONE or
-                    id_ex_regs_insn_type = OP_JAL or id_ex_regs_insn_type = OP_JALR or
-                    ex_mem_regs_insn_type = OP_JAL or ex_mem_regs_insn_type = OP_JALR) then  -- control transfer - kill the instruction
+                if (hazard_stall = '0' and cache_stall = '0' and branch_stall = '0') then
+                    if (id_ex_regs_branch_type /= BRANCH_NONE or
+                        if_id_branch_stall = '1' or
+                        id_ex_regs_insn_type = OP_JAL or id_ex_regs_insn_type = OP_JALR or
+                        ex_mem_regs_insn_type = OP_JAL or ex_mem_regs_insn_type = OP_JALR) then  -- control transfer - kill the instruction
+                        id_ex_regs_rs1_data    <= (others => '0');
+                        id_ex_regs_rs2_data    <= (others => '0');
+                        id_ex_regs_npc         <= (others => '0');
+                        id_ex_regs_alu_func    <= ALU_NONE;
+                        id_ex_regs_op2_src     <= '0';
+                        id_ex_regs_insn_type   <= OP_ILLEGAL;
+                        id_ex_regs_branch_type <= BRANCH_NONE;
+                        id_ex_regs_load_type   <= LOAD_NONE;
+                        id_ex_regs_store_type  <= STORE_NONE;
+                        id_ex_regs_rf_wr_addr  <= "00000";
+                        id_ex_regs_rf_wr_en    <= '0';
+                        id_ex_regs_use_imm     <= '0';
+                    else
+                        EX_DEBUG_INSN_ISSUE    <= '1';
+                        id_ex_regs_rs1_data    <= id_rs1_data;
+                        id_ex_regs_rs2_data    <= id_rs2_data;
+                        id_ex_regs_npc         <= if_id_regs_npc;
+                        id_ex_regs_alu_func    <= id_decoded.alu_func;
+                        id_ex_regs_op2_src     <= id_decoded.op2_src;
+                        id_ex_regs_insn_type   <= id_decoded.insn_type;
+                        id_ex_regs_branch_type <= id_decoded.branch_type;
+                        id_ex_regs_load_type   <= id_decoded.load_type;
+                        id_ex_regs_store_type  <= id_decoded.store_type;
+                        id_ex_regs_imm         <= id_decoded.imm;
+                        id_ex_regs_use_imm     <= id_decoded.use_imm;
+
+                        -- determine if the register file will be written as a result
+                        -- of this instruction
+                        if (next_pc_sel = PC_SEQ) then
+                            id_ex_regs_rf_wr_addr <= id_decoded.rd;
+                            if (id_decoded.insn_type = OP_ALU or id_decoded.insn_type = OP_LOAD or id_decoded.insn_type = OP_JALR or id_decoded.insn_type = OP_JAL) then
+                                if (id_decoded.rd /= "00000") then
+                                    id_ex_regs_rf_wr_en <= '1';
+                                end if;
+                            end if;
+                        end if;
+                    end if;
+                else
+                    -- stalled
                     id_ex_regs_rs1_data    <= (others => '0');
                     id_ex_regs_rs2_data    <= (others => '0');
                     id_ex_regs_npc         <= (others => '0');
@@ -244,46 +297,8 @@ begin
                     id_ex_regs_rf_wr_addr  <= "00000";
                     id_ex_regs_rf_wr_en    <= '0';
                     id_ex_regs_use_imm     <= '0';
-                else
-                    id_ex_regs_rs1_data    <= id_rs1_data;
-                    id_ex_regs_rs2_data    <= id_rs2_data;
-                    id_ex_regs_npc         <= if_id_regs_npc;
-                    id_ex_regs_alu_func    <= id_decoded.alu_func;
-                    id_ex_regs_op2_src     <= id_decoded.op2_src;
-                    id_ex_regs_insn_type   <= id_decoded.insn_type;
-                    id_ex_regs_branch_type <= id_decoded.branch_type;
-                    id_ex_regs_load_type   <= id_decoded.load_type;
-                    id_ex_regs_store_type  <= id_decoded.store_type;
-                    id_ex_regs_imm         <= id_decoded.imm;
-                    id_ex_regs_use_imm     <= id_decoded.use_imm;
-
-                    -- determine if the register file will be written as a result
-                    -- of this instruction
-                    if (next_pc_sel = PC_SEQ) then
-                        id_ex_regs_rf_wr_addr <= id_decoded.rd;
-                        if (id_decoded.insn_type = OP_ALU or id_decoded.insn_type = OP_LOAD or id_decoded.insn_type = OP_JALR or id_decoded.insn_type = OP_JAL) then
-                            if (id_decoded.rd /= "00000") then
-                                id_ex_regs_rf_wr_en <= '1';
-                            end if;
-                        end if;
-                    end if;
                 end if;
-            else
-                -- stalled
-                id_ex_regs_rs1_data    <= (others => '0');
-                id_ex_regs_rs2_data    <= (others => '0');
-                id_ex_regs_npc         <= (others => '0');
-                id_ex_regs_alu_func    <= ALU_NONE;
-                id_ex_regs_op2_src     <= '0';
-                id_ex_regs_insn_type   <= OP_ILLEGAL;
-                id_ex_regs_branch_type <= BRANCH_NONE;
-                id_ex_regs_load_type   <= LOAD_NONE;
-                id_ex_regs_store_type  <= STORE_NONE;
-                id_ex_regs_rf_wr_addr  <= "00000";
-                id_ex_regs_rf_wr_en    <= '0';
-                id_ex_regs_use_imm     <= '0';
             end if;
-        end if;
     end process id_ex_regs_proc;
 
     -- print instructions as they are issued
@@ -307,8 +322,6 @@ begin
     -- Execute stage --
     -------------------
     -------------------
-
-    ex_branch_jal_target <= unsigned(id_ex_regs_npc) + unsigned(id_ex_regs_rs2_data);
 
     -- the address to write to 'rd' during a JAL or JALR
     ex_jump_addr <= unsigned(id_ex_regs_npc) + to_unsigned(4, 32);
@@ -429,19 +442,8 @@ begin
     ---------------------
 
     -- purpose: perform register file writeback
-    -- type   : combinational
-    -- inputs : mem_wb_regs
-    -- outputs: register file write signals
-    writeback_proc : process (mem_wb_regs_rf_wr_addr, mem_wb_regs_rf_wr_en, mem_wb_regs_insn_type, mem_wb_regs_lmd, mem_wb_regs_alu_output) is
-    begin  -- process writeback_proc
-        wb_rf_wr_addr <= mem_wb_regs_rf_wr_addr;
-        wb_rf_wr_en   <= mem_wb_regs_rf_wr_en;
-
-        if mem_wb_regs_insn_type = OP_LOAD then
-            wb_rf_wr_data <= mem_wb_regs_lmd;
-        else
-            wb_rf_wr_data <= mem_wb_regs_alu_output;
-        end if;
-    end process writeback_proc;
-
+    wb_rf_wr_addr <= mem_wb_regs_rf_wr_addr;
+    wb_rf_wr_en   <= mem_wb_regs_rf_wr_en;
+    wb_rf_wr_data <= mem_wb_regs_lmd when (mem_wb_regs_insn_type = OP_LOAD) else mem_wb_regs_alu_output;
+    
 end architecture Behavioral;
