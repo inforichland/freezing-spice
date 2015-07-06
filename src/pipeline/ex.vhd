@@ -15,6 +15,7 @@ architecture Behavioral of instruction_executor is
     signal op2            : word;
     signal alu_out        : word;
     signal compare_result : std_logic;
+    signal return_addr : unsigned(word'range);
 
     constant c_four : unsigned(2 downto 0) := to_unsigned(4, 3);
 begin  -- architecture Behavioral
@@ -22,15 +23,13 @@ begin  -- architecture Behavioral
     -- assign modules outputs
     ex_q.alu_result     <= alu_out;
     ex_q.compare_result <= compare_result;
-    ex_q.return_addr    <= return_addr;
+    ex_q.return_addr    <= std_logic_vector(return_addr);
 
     -- ALU operand 1 multiplexer
-    with ex_d.insn_type select
-        op1 <=
-        ex_d.npc when OP_BRANCH,
-        ex_d.npc when OP_JAL,
-        ex_d.npc when OP_JALR,
-        ex_d.rs1 when others;
+    op1 <= ex_d.npc when (ex_d.insn_type = OP_BRANCH or
+                          ex_d.insn_type = OP_JAL or
+                          ex_d.insn_type = OP_JALR)
+           else ex_d.rs1;
 
     -- ALU operand 2 multiplexer
     op2 <= ex_d.imm when ((ex_d.insn_type = OP_ALU and ex_d.use_imm = '1') or
@@ -54,6 +53,6 @@ begin  -- architecture Behavioral
                   compare_result => compare_result);
 
     -- return address for JAL/JALR
-    return_addr <= ex_d.npc + c_four;
+    return_addr <= unsigned(ex_d.npc) + c_four;
     
 end architecture Behavioral;

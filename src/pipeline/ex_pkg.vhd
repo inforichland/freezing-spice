@@ -15,6 +15,7 @@ package ex_pkg is
         use_imm : std_logic;
         alu_func : alu_func_t;
         branch_type : branch_type_t;
+        imm : word;
     end record ex_in;
 
     -- outputs from execution stage

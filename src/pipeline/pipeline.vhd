@@ -7,6 +7,7 @@ use work.common.all;
 use work.if_pkg.all;
 use work.id_pkg.all;
 use work.ex_pkg.all;
+use work.mem_pkg.all;
 
 entity pipeline is
     generic (g_initial_pc : unsigned(31 downto 0) := (others => '0');
@@ -53,12 +54,21 @@ architecture Behavioral of pipeline is
     -------------------------------------------------
     -- ID/EX pipeline registers
     -------------------------------------------------
-    signal id_ex_pc       : word                         := (others => '0');
-    signal id_ex_rs1_addr : std_logic_vector(4 downto 0) := (others => '0');
-    signal id_ex_rs2_addr : std_logic_vector(4 downto 0) := (others => '0');
-    signal id_ex_op1      : word                         := (others => '0');
-    signal id_ex_op2      : word                         := (others => '0');
-    signal id_ex_ir       : word                         := (others => '0');
+    signal id_ex_pc          : word                         := (others => '0');
+    signal id_ex_rs1_addr    : std_logic_vector(4 downto 0) := (others => '0');
+    signal id_ex_rs2_addr    : std_logic_vector(4 downto 0) := (others => '0');
+    signal id_ex_op1         : word                         := (others => '0');
+    signal id_ex_op2         : word                         := (others => '0');
+    signal id_ex_ir          : word                         := (others => '0');
+    signal id_ex_imm         : word                         := (others => '0');
+    signal id_ex_insn_type   : insn_type_t                  := OP_ILLEGAL;
+    signal id_ex_use_imm     : std_logic                    := '0';
+    signal id_ex_alu_func    : alu_func_t                   := ALU_NONE;
+    signal id_ex_branch_type : branch_type_t                := BRANCH_NONE;
+    signal id_ex_rd_addr     : std_logic_vector(4 downto 0) := (others => '0');
+    signal id_ex_load_type   : load_type_t                  := LOAD_NONE;
+    signal id_ex_store_type  : store_type_t                 := STORE_NONE;
+    signal id_ex_rf_we       : std_logic                    := '0';
 
     -------------------------------------------------
     -- EX signals
@@ -69,20 +79,77 @@ architecture Behavioral of pipeline is
     -------------------------------------------------
     -- EX/MEM pipeline registers
     -------------------------------------------------
+    signal ex_mem_load_pc     : std_logic                    := '0';
+    signal ex_mem_next_pc     : word                         := (others => '0');
+    signal ex_mem_alu_out     : word                         := (others => '0');
+    signal ex_mem_return_addr : word                         := (others => '0');
+    signal ex_mem_pc          : word                         := (others => '0');
+    signal ex_mem_load_type   : load_type_t                  := LOAD_NONE;
+    signal ex_mem_store_type  : store_type_t                 := STORE_NONE;
+    signal ex_mem_rd_addr     : std_logic_vector(4 downto 0) := (others => '0');
+    signal ex_mem_imm         : word                         := (others => '0');
+    signal ex_mem_insn_type   : insn_type_t                  := OP_ILLEGAL;
+    signal ex_mem_rf_we       : std_logic                    := '0';
+
+    -------------------------------------------------
+    -- MEM signals
+    -------------------------------------------------
+    signal mem_d : mem_in;
+    signal mem_q : mem_out;
+
+    -------------------------------------------------
+    -- MEM/WB pipeline registers
+    -------------------------------------------------
+    signal mem_wb_rd_addr    : std_logic_vector(4 downto 0) := (others => '0');
+    signal mem_wb_rf_we      : std_logic                    := '0';
+    signal mem_wb_alu_output : word                         := (others => '0');
+
+    -------------------------------------------------
+    -- WB signals
+    -------------------------------------------------
+    signal wb_rf_wr_addr : std_logic_vector(4 downto 0);
+    signal wb_rf_wr_en   : std_logic;
+    signal wb_rf_wr_data : word;
+
+    -------------------------------------------------
+    -- Stalling
+    -------------------------------------------------
+    signal branch_stall : std_logic;
+    signal hazard_stall : std_logic;
     
 begin  -- architecture Behavioral
+
+    -------------------------------------------------
+    -- Detect when stalling is necessary
+    -------------------------------------------------
+    branch_stall <= '1' when ex_mem_load_pc = '1' else '0';
+    id_stall     <= hazard_stall;
+    if_kill      <= ex_mem_load_pc or (not insn_valid);
+    id_kill      <= ex_mem_load_pc;
+
+    -- Determine when to stall the pipeline because of structural hazards
+    hazard_stall <= '1' when (((id_ex_rd_addr = id_q.rs1) and (id_q.rs1 /= "00000") and (id_ex_rf_we = '1') and (id_q.rs1_rd = '1'))
+                              or ((ex_mem_rd_addr = id_q.rs1) and (id_q.rs1 /= "00000") and (ex_mem_rf_we = '1') and (id_q.rs1_rd = '1'))
+                              or ((mem_wb_rd_addr = id_q.rs1) and (id_q.rs1 /= "00000") and (mem_wb_rf_we = '1') and (id_q.rs1_rd = '1'))
+                              or ((id_ex_rd_addr = id_q.rs2) and (id_q.rs2 /= "00000") and (id_ex_rf_we = '1') and (id_q.rs2_rd = '1'))
+                              or ((ex_mem_rd_addr = id_q.rs2) and (id_q.rs2 /= "00000") and (ex_mem_rf_we = '1') and (id_q.rs2_rd = '1'))
+                              or ((mem_wb_rd_addr = id_q.rs2) and (id_q.rs2 /= "00000") and (mem_wb_rf_we = '1') and (id_q.rs2_rd = '1'))
+                              or ((ex_mem_insn_type = OP_LOAD) and (id_ex_rd_addr = id_q.rs1) and (id_ex_rd_addr /= "00000") and (id_q.rs1_rd = '1'))
+                              or ((ex_mem_insn_type = OP_LOAD) and (id_ex_rd_addr = id_q.rs2) and (id_ex_rd_addr /= "00000") and (id_q.rs2_rd = '1')))
+                    else '0';
 
     ---------------------------------------------------
     -- Instruction fetch
     ---------------------------------------------------
 
     -- inputs
-    if_d.stall   <= '0';
-    if_d.load_pc <= '0';
-    if_d.next_pc <= (others => '0');
+    if_d.stall   <= branch_stall or hazard_stall;
+    if_d.load_pc <= ex_mem_load_pc;
+    if_d.next_pc <= ex_mem_next_pc;
 
     -- outputs
-    insn_addr <= if_q.fetch_addr;
+    insn_addr    <= if_q.fetch_addr;
+    data_read_en <= '1' when id_ex_insn_type = OP_LOAD else '0';
 
     -- instantiation
     if_stage : entity work.instruction_fetch(Behavioral)
@@ -95,11 +162,19 @@ begin  -- architecture Behavioral
     if_id_reg_proc : process (clk, rst_n) is
     begin  -- process if_id_reg_proc
         if (rst_n = '0') then           -- asynchronous reset (active low)
-            if_id_ir <= (others => '0');
+            if_id_ir <= NOP;
             if_id_pc <= (others => '0');
         elsif (rising_edge(clk)) then
-            if_id_ir <= insn_in;
-            if_id_pc <= if_q.pc;
+            if (id_stall = '0' and full_stall = '0') then
+                if (if_kill = '1') then
+                    if_id_ir <= NOP;
+                else
+                    if_id_ir <= insn_in;
+                end if;
+
+                if_id_pc <= if_q.pc;
+                
+            end if;
         end if;
     end process if_id_reg_proc;
 
@@ -114,9 +189,9 @@ begin  -- architecture Behavioral
                   addrb => id_q.rs2,
                   rega  => rs1_data,
                   regb  => rs2_data,
-                  addrw => "00000",          --wb_rf_wr_addr,
-                  dataw => (others => '0'),  --wb_rf_wr_data,
-                  we    => '0');             --wb_rf_wr_en);
+                  addrw => wb_rf_wr_addr,
+                  dataw => wb_rf_wr_data,
+                  we    => wb_rf_wr_en);
 
     -- inputs
     id_d.instruction <= if_id_ir;
@@ -137,30 +212,79 @@ begin  -- architecture Behavioral
             id_ex_rs2_addr <= (others => '0');
             id_ex_op1      <= (others => '0');
             id_ex_op2      <= (others => '0');
-            id_ex_ir       <= (others => '0');
+            id_ex_ir       <= NOP;
         elsif (rising_edge(clk)) then   -- rising clock edge
             -- needed for EX stage
-            id_ex_pc       <= if_id_pc;
-            id_ex_rs1_addr <= id_q.rs1;
-            id_ex_rs2_addr <= id_q.rs2;
-            id_ex_op1      <= rs1_data;
-            id_ex_op2      <= rs2_data;
-            id_ex_ir       <= if_id_ir;
-            id_ex_insn_type   <= id_q.insn_type;
-            id_ex_use_imm     <= id_q.use_imm;
-            id_ex_alu_func    <= id_q.alu_func;
-            id_ex_branch_type <= id_q.branch_type;
+            if (id_stall = '0' and full_stall = '0') then
+                id_ex_pc       <= if_id_pc;
+                id_ex_rs1_addr <= id_q.rs1;
+                id_ex_rs2_addr <= id_q.rs2;
+                id_ex_op1      <= rs1_data;
+                id_ex_op2      <= rs2_data;
+                id_ex_use_imm  <= id_q.use_imm;
 
-            -- needed for later stages
-            id_ex_rd_addr <= id_q.rd; -- destination register address
-            id_ex_load_type <= id_q.load_type;
-            id_ex_store_type <= id_q.store_type;
+                if (id_kill = '1') then
+                    id_ex_ir          <= NOP;
+                    id_ex_rd_addr     <= (others => '0');
+                    id_ex_rf_we       <= '0';
+                    id_ex_branch_type <= BRANCH_NONE;
+                    id_ex_load_type   <= LOAD_NONE;
+                    id_ex_store_type  <= STORE_NONE;
+                else
+
+                end if;
+
+
+
+
+
+--                id_ex_pc          <= (others => '0');
+                id_ex_rs1_addr    <= (others => '0');
+                id_ex_rs2_addr    <= (others => '0');
+                id_ex_op1         <= (others => '0');
+                id_ex_op2         <= (others => '0');
+                id_ex_ir          <= NOP;
+                id_ex_insn_type   <= OP_ILLEGAL;
+                id_ex_use_imm     <= '0';
+                id_ex_imm         <= (others => '0');
+                id_ex_alu_func    <= ALU_NONE;
+                id_ex_branch_type <= BRANCH_NONE;
+                id_ex_rd_addr     <= (others => '0');
+                id_ex_load_type   <= LOAD_NONE;
+                id_ex_store_type  <= STORE_NONE;
+                id_ex_rf_we       <= '0';
+            else
+                id_ex_pc          <= if_id_pc;
+                id_ex_rs1_addr    <= id_q.rs1;
+                id_ex_rs2_addr    <= id_q.rs2;
+                id_ex_op1         <= rs1_data;
+                id_ex_op2         <= rs2_data;
+                id_ex_ir          <= if_id_ir;
+                id_ex_insn_type   <= id_q.insn_type;
+                id_ex_use_imm     <= id_q.use_imm;
+                id_ex_imm         <= id_q.imm;
+                id_ex_alu_func    <= id_q.alu_func;
+                id_ex_branch_type <= id_q.branch_type;
+
+                -- needed for later stages
+                id_ex_rd_addr    <= id_q.rd;  -- destination register address
+                id_ex_load_type  <= id_q.load_type;
+                id_ex_store_type <= id_q.store_type;
+
+                -- determine if the register file will be written as a result of
+                -- this instruction
+                if (id_q.insn_type = OP_ALU or id_q.insn_type = OP_LOAD or id_q.insn_type = OP_JALR or id_q.insn_type = OP_JAL) then
+                    if (id_q.rd /= "00000") then
+                        id_ex_rf_we <= '1';
+                    end if;
+                end if;
+            end if;
         end if;
     end process id_ex_reg_proc;
 
-    ---------------------------------------------------
-    -- print instructions as they are issued
-    ---------------------------------------------------
+---------------------------------------------------
+-- print instructions as they are issued
+---------------------------------------------------
     print_decode : if (g_for_sim = true) generate
         print_decode_proc : process (id_ex_ir, id_ex_pc) is
             variable l : line;
@@ -184,6 +308,7 @@ begin  -- architecture Behavioral
     ex_d.use_imm     <= id_ex_use_imm;
     ex_d.alu_func    <= id_ex_alu_func;
     ex_d.branch_type <= id_ex_branch_type;
+    ex_d.imm         <= id_ex_imm;
 
     -- instantiation
     ex_stage : entity work.instruction_executor(Behavioral)
@@ -197,9 +322,84 @@ begin  -- architecture Behavioral
     ex_mem_regs_proc : process (clk, rst_n) is
     begin  -- process ex_mem_regs_proc
         if (rst_n = '0') then           -- asynchronous reset (active low)
-
+            ex_mem_load_pc     <= '0';
+            ex_mem_next_pc     <= (others => '0');
+            ex_mem_alu_out     <= (others => '0');
+            ex_mem_return_addr <= (others => '0');
+            ex_mem_pc          <= (others => '0');
+            ex_mem_load_type   <= LOAD_NONE;
+            ex_mem_store_type  <= STORE_NONE;
+            ex_mem_rd_addr     <= (others => '0');
+            ex_mem_imm         <= (others => '0');
+            ex_mem_insn_type   <= OP_ILLEGAL;
+            ex_mem_rf_we       <= '0';
         elsif (rising_edge(clk)) then
+            -- default
 
+            if (id_q.insn_type = OP_JAL or id_q.insn_type = OP_JALR or
+                (id_q.insn_type = OP_BRANCH and ex_q.compare_result = '1')) then
+                ex_mem_load_pc <= '1';
+            else
+                ex_mem_load_pc <= '0';
+            end if;
+
+            if (id_q.insn_type = OP_JAL or id_q.insn_type = OP_BRANCH or id_q.insn_type = OP_JALR) then
+                ex_mem_next_pc <= ex_q.alu_result;
+            end if;
+
+            ex_mem_alu_out     <= ex_q.alu_result;
+            ex_mem_return_addr <= ex_q.return_addr;
+            ex_mem_pc          <= id_ex_pc;
+            ex_mem_load_type   <= id_ex_load_type;
+            ex_mem_store_type  <= id_ex_store_type;
+            ex_mem_rd_addr     <= id_ex_rd_addr;
+            ex_mem_imm         <= id_ex_imm;
+            ex_mem_insn_type   <= id_ex_insn_type;
+            ex_mem_rf_we       <= id_ex_rf_we;
+            
         end if;
     end process ex_mem_regs_proc;
+
+    ---------------------------------------------------
+    -- Memory stage
+    ---------------------------------------------------
+
+    -- inputs
+    mem_d.alu_out   <= ex_mem_alu_out;
+    mem_d.rf_we     <= ex_mem_rf_we;
+    mem_d.insn_type <= ex_mem_insn_type;
+    mem_d.rd_addr   <= ex_mem_rd_addr;
+
+    -- outputs
+
+    -- instantiation
+    mem_stage : entity work.memory_stage(Behavioral)
+        port map (mem_d, mem_q);
+
+    ---------------------------------------------------
+    -- MEM/WB pipeline registers
+    ---------------------------------------------------
+
+    -- purpose: Create the MEM/WB pipeline registers
+    mem_wb_regs : process (clk, rst_n) is
+    begin  -- process mem_wb_regs
+        if (rst_n = '0') then           -- asynchronous reset (active low)
+            mem_wb_rd_addr    <= (others => '0');
+            mem_wb_rf_we      <= '0';
+            mem_wb_alu_output <= (others => '0');
+        elsif (rising_edge(clk)) then   -- rising clock edge
+            mem_wb_rd_addr    <= ex_mem_rd_addr;
+            mem_wb_rf_we      <= ex_mem_rf_we;
+            mem_wb_alu_output <= ex_mem_alu_out;
+        end if;
+    end process mem_wb_regs;
+
+    ---------------------------------------------------
+    -- Writeback stage
+    ---------------------------------------------------
+    wb_rf_wr_addr <= mem_wb_rd_addr;
+    wb_rf_wr_en   <= mem_wb_rf_we;
+--    wb_rf_wr_data <= mem_wb_regs_lmd when (mem_wb_regs_insn_type = OP_LOAD) else mem_wb_regs_alu_output;
+    wb_rf_wr_data <= mem_wb_alu_output;
+
 end architecture Behavioral;
