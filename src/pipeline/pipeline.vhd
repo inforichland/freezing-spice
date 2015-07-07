@@ -50,6 +50,7 @@ architecture Behavioral of pipeline is
     signal id_q     : id_out;
     signal rs1_data : word;
     signal rs2_data : word;
+    signal id_rf_we : std_logic;
 
     -------------------------------------------------
     -- ID/EX pipeline registers
@@ -91,6 +92,8 @@ architecture Behavioral of pipeline is
     signal ex_mem_insn_type   : insn_type_t                  := OP_ILLEGAL;
     signal ex_mem_rf_we       : std_logic                    := '0';
 
+    signal ex_mem_compare_result : std_logic;
+
     -------------------------------------------------
     -- MEM signals
     -------------------------------------------------
@@ -116,16 +119,22 @@ architecture Behavioral of pipeline is
     -------------------------------------------------
     signal branch_stall : std_logic;
     signal hazard_stall : std_logic;
+    signal if_kill      : std_logic;
+    signal id_kill      : std_logic;
+    signal id_stall     : std_logic;
+    signal full_stall   : std_logic;
     
 begin  -- architecture Behavioral
 
     -------------------------------------------------
     -- Detect when stalling is necessary
     -------------------------------------------------
-    branch_stall <= '1' when ex_mem_load_pc = '1' else '0';
-    id_stall     <= hazard_stall;
+    branch_stall <= '1' when (id_ex_insn_type = OP_JAL or id_ex_insn_type = OP_JALR or
+                (id_ex_insn_type = OP_BRANCH and ex_q.compare_result = '1')) else '0';
+    id_stall     <= hazard_stall or branch_stall;
     if_kill      <= ex_mem_load_pc or (not insn_valid);
     id_kill      <= ex_mem_load_pc;
+    full_stall   <= '0';                -- TODO: for now
 
     -- Determine when to stall the pipeline because of structural hazards
     hazard_stall <= '1' when (((id_ex_rd_addr = id_q.rs1) and (id_q.rs1 /= "00000") and (id_ex_rf_we = '1') and (id_q.rs1_rd = '1'))
@@ -143,7 +152,7 @@ begin  -- architecture Behavioral
     ---------------------------------------------------
 
     -- inputs
-    if_d.stall   <= branch_stall or hazard_stall;
+    if_d.stall   <= ex_mem_load_pc or hazard_stall or branch_stall;
     if_d.load_pc <= ex_mem_load_pc;
     if_d.next_pc <= ex_mem_next_pc;
 
@@ -200,6 +209,10 @@ begin  -- architecture Behavioral
     id_stage : entity work.instruction_decoder(Behavioral)
         port map (id_d, id_q);
 
+    -- determine if the register file will be written as a result of
+    -- this instruction
+    id_rf_we <= '1' when ((id_q.insn_type = OP_ALU or id_q.insn_type = OP_LOAD or id_q.insn_type = OP_JALR or id_q.insn_type = OP_JAL) and (id_q.rd /= "00000")) else '0';
+
     ---------------------------------------------------
     -- ID/EX pipeline registers
     ---------------------------------------------------
@@ -226,65 +239,44 @@ begin  -- architecture Behavioral
                 if (id_kill = '1') then
                     id_ex_ir          <= NOP;
                     id_ex_rd_addr     <= (others => '0');
+                    id_ex_insn_type   <= OP_ILLEGAL;
                     id_ex_rf_we       <= '0';
+                    id_ex_use_imm     <= '0';
+                    id_ex_imm         <= (others => '0');
+                    id_ex_alu_func    <= ALU_NONE;
                     id_ex_branch_type <= BRANCH_NONE;
                     id_ex_load_type   <= LOAD_NONE;
                     id_ex_store_type  <= STORE_NONE;
                 else
-
+                    id_ex_ir          <= if_id_ir;
+                    id_ex_rd_addr     <= id_q.rd;
+                    id_ex_insn_type   <= id_q.insn_type;
+                    id_ex_rf_we       <= id_rf_we;
+                    id_ex_use_imm     <= id_q.use_imm;
+                    id_ex_imm         <= id_q.imm;
+                    id_ex_alu_func    <= id_q.alu_func;
+                    id_ex_branch_type <= id_q.branch_type;
+                    id_ex_load_type   <= id_q.load_type;
+                    id_ex_store_type  <= id_q.store_type;
                 end if;
-
-
-
-
-
---                id_ex_pc          <= (others => '0');
-                id_ex_rs1_addr    <= (others => '0');
-                id_ex_rs2_addr    <= (others => '0');
-                id_ex_op1         <= (others => '0');
-                id_ex_op2         <= (others => '0');
+            elsif (id_stall = '1' and full_stall = '0') then
                 id_ex_ir          <= NOP;
+                id_ex_rd_addr     <= (others => '0');
                 id_ex_insn_type   <= OP_ILLEGAL;
+                id_ex_rf_we       <= '0';
                 id_ex_use_imm     <= '0';
                 id_ex_imm         <= (others => '0');
                 id_ex_alu_func    <= ALU_NONE;
                 id_ex_branch_type <= BRANCH_NONE;
-                id_ex_rd_addr     <= (others => '0');
                 id_ex_load_type   <= LOAD_NONE;
                 id_ex_store_type  <= STORE_NONE;
-                id_ex_rf_we       <= '0';
-            else
-                id_ex_pc          <= if_id_pc;
-                id_ex_rs1_addr    <= id_q.rs1;
-                id_ex_rs2_addr    <= id_q.rs2;
-                id_ex_op1         <= rs1_data;
-                id_ex_op2         <= rs2_data;
-                id_ex_ir          <= if_id_ir;
-                id_ex_insn_type   <= id_q.insn_type;
-                id_ex_use_imm     <= id_q.use_imm;
-                id_ex_imm         <= id_q.imm;
-                id_ex_alu_func    <= id_q.alu_func;
-                id_ex_branch_type <= id_q.branch_type;
-
-                -- needed for later stages
-                id_ex_rd_addr    <= id_q.rd;  -- destination register address
-                id_ex_load_type  <= id_q.load_type;
-                id_ex_store_type <= id_q.store_type;
-
-                -- determine if the register file will be written as a result of
-                -- this instruction
-                if (id_q.insn_type = OP_ALU or id_q.insn_type = OP_LOAD or id_q.insn_type = OP_JALR or id_q.insn_type = OP_JAL) then
-                    if (id_q.rd /= "00000") then
-                        id_ex_rf_we <= '1';
-                    end if;
-                end if;
             end if;
         end if;
     end process id_ex_reg_proc;
 
----------------------------------------------------
--- print instructions as they are issued
----------------------------------------------------
+    ---------------------------------------------------
+    -- print instructions as they are issued
+    ---------------------------------------------------
     print_decode : if (g_for_sim = true) generate
         print_decode_proc : process (id_ex_ir, id_ex_pc) is
             variable l : line;
@@ -336,15 +328,12 @@ begin  -- architecture Behavioral
         elsif (rising_edge(clk)) then
             -- default
 
-            if (id_q.insn_type = OP_JAL or id_q.insn_type = OP_JALR or
-                (id_q.insn_type = OP_BRANCH and ex_q.compare_result = '1')) then
+            if (id_ex_insn_type = OP_JAL or id_ex_insn_type = OP_JALR or
+                (id_ex_insn_type = OP_BRANCH and ex_q.compare_result = '1')) then
                 ex_mem_load_pc <= '1';
+                ex_mem_next_pc <= ex_q.alu_result;
             else
                 ex_mem_load_pc <= '0';
-            end if;
-
-            if (id_q.insn_type = OP_JAL or id_q.insn_type = OP_BRANCH or id_q.insn_type = OP_JALR) then
-                ex_mem_next_pc <= ex_q.alu_result;
             end if;
 
             ex_mem_alu_out     <= ex_q.alu_result;

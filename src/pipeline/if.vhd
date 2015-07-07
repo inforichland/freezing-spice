@@ -54,10 +54,10 @@ begin  -- architecture Behavioral
 
         if (zero = '1') then
             v.pc := (others => '0');
-        elsif (d.stall = '1') then
-            v.pc := r.pc;
         elsif (d.load_pc = '1') then
             v.pc := unsigned(d.next_pc);
+        elsif (d.stall = '1') then
+            v.pc := r.pc;
         else
             v.pc := r.pc + c_four;
         end if;

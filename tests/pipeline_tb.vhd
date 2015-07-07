@@ -35,7 +35,7 @@ architecture testbench of pipeline_tb is
     -- 4 : 00000000100000000000000100010011   ADDI 8, x0, x2    (800113)
     -- 8 : 00000000001000001000000110110011   ADD  x1, x2, x3   (2081B3)
     --12 : 00000000000100011001000110010011   SLLI 1, x3, x4    (119213)
-    --16 : 00000100000000000000000001101111   JAL  16, x0       (100036F)
+    --16 : 00000100000000000000000001101111   JAL  16, x6       (100036F)
     --20 : 00000000000000000000000000010011   ADDI 1, x0, x1    (100093)
     --24 : 00000000000000000000000000010011   NOP               (13)
     --28 : 00000000000000000000000000010011   NOP
@@ -46,12 +46,17 @@ architecture testbench of pipeline_tb is
                              4      => encode_i_type(I_ADDI, "000000001000", 0, 2),
                              8      => encode_r_type(R_ADD, 1, 2, 3),
                              12     => encode_i_shift(I_SLLI, "00001", 3, 4),
-                             16     => encode_uj_type(UJ_JAL, "00000000000000001000", 6),
+                             16     => encode_uj_type(UJ_JAL, "00000000000000010010", 6),
                              20     => encode_i_type(I_ADDI, "000000000001", 0, 1),
                              24     => NOP,
                              28     => NOP,
-                             32     => encode_r_type(R_ADD, 3, 4, 5),
-                             36     => encode_uj_type(UJ_JAL, "00000000000000000000", 0),
+                             32     => NOP,
+                             36     => NOP,
+                             40     => NOP,
+                             44     => NOP,
+                             48     => NOP,
+                             52     => encode_r_type(R_ADD, 3, 4, 5),
+                             56     => encode_uj_type(UJ_JAL, "00000000000000000000", 0),
                              others => NOP);
 
 begin  -- architecture testbench
@@ -67,19 +72,14 @@ begin  -- architecture testbench
         if rst_n = '0' then
             insn_in    <= (others => '0');
             insn_valid <= '0';
-        elsif rising_edge(clk) then            
-            if (to_integer(unsigned(insn_addr)) <= to_integer(to_unsigned(36, 32))) then
-                insn_in    <= ram(to_integer(unsigned(insn_addr)));
-                insn_valid <= '1';
-            else
-                insn_in    <= (others => '0');
-                insn_valid <= '0';
-            end if;
+        elsif rising_edge(clk) then
+            insn_valid <= '1';
 
-            --write(l, to_integer(unsigned(insn_addr)));
-            --write(l, string'(" : "));
-            --write(l, insn_in);
-            --writeline(output, l);
+            if (to_integer(unsigned(insn_addr)) <= to_integer(to_unsigned(56, 32))) then
+                insn_in <= ram(to_integer(unsigned(insn_addr)));
+            else
+                insn_in <= NOP;
+            end if;
         end if;
     end process ram_proc;
 
@@ -110,7 +110,7 @@ begin  -- architecture testbench
         println ("Beginning simulation");
 
         rst_n <= '0';
-        wait for clk_period * 5;
+        wait for clk_period * 2;
         rst_n <= '1';
 
         -- begin stimulus
