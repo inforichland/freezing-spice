@@ -25,6 +25,7 @@ package id_pkg is
         rs1_rd      : std_logic;
         rs2_rd      : std_logic;
         use_imm     : std_logic;
+        rf_we       : std_logic;
     end record id_out;
 
     constant c_decoded_reset : id_out := (alu_func    => ALU_NONE,
@@ -40,7 +41,8 @@ package id_pkg is
                                           opcode      => (others => 'X'),
                                           rs1_rd      => '0',
                                           rs2_rd      => '0',
-                                          use_imm     => '0');
+                                          use_imm     => '0',
+                                          rf_we       => '0');
 
     -- Constants
     constant c_op_load     : std_logic_vector(6 downto 0) := "0000011";

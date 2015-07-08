@@ -1,3 +1,19 @@
+-------------------------------------------------------------------------------
+-- Title      : 5-stage RISCV integer pipeline
+-- Project    : Freezing Spice
+-------------------------------------------------------------------------------
+-- File       : pipeline.vhd
+-- Author     :   Tim Wawrzynczak
+-- Created    : 2015-07-07
+-- Last update: 2015-07-07
+-- Platform   : 
+-- Standard   : VHDL'93/02
+-------------------------------------------------------------------------------
+-- Description: RV32I 5-stage ("classic MIPS") pipeline
+-------------------------------------------------------------------------------
+-- Copyright (c) 2015 
+-------------------------------------------------------------------------------
+
 library ieee;
 use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
@@ -50,7 +66,6 @@ architecture Behavioral of pipeline is
     signal id_q     : id_out;
     signal rs1_data : word;
     signal rs2_data : word;
-    signal id_rf_we : std_logic;
 
     -------------------------------------------------
     -- ID/EX pipeline registers
@@ -60,7 +75,7 @@ architecture Behavioral of pipeline is
     signal id_ex_rs2_addr    : std_logic_vector(4 downto 0) := (others => '0');
     signal id_ex_op1         : word                         := (others => '0');
     signal id_ex_op2         : word                         := (others => '0');
-    signal id_ex_ir          : word                         := (others => '0');
+    signal id_ex_ir          : word                         := NOP;
     signal id_ex_imm         : word                         := (others => '0');
     signal id_ex_insn_type   : insn_type_t                  := OP_ILLEGAL;
     signal id_ex_use_imm     : std_logic                    := '0';
@@ -80,18 +95,17 @@ architecture Behavioral of pipeline is
     -------------------------------------------------
     -- EX/MEM pipeline registers
     -------------------------------------------------
-    signal ex_mem_load_pc     : std_logic                    := '0';
-    signal ex_mem_next_pc     : word                         := (others => '0');
-    signal ex_mem_alu_out     : word                         := (others => '0');
-    signal ex_mem_return_addr : word                         := (others => '0');
-    signal ex_mem_pc          : word                         := (others => '0');
-    signal ex_mem_load_type   : load_type_t                  := LOAD_NONE;
-    signal ex_mem_store_type  : store_type_t                 := STORE_NONE;
-    signal ex_mem_rd_addr     : std_logic_vector(4 downto 0) := (others => '0');
-    signal ex_mem_imm         : word                         := (others => '0');
-    signal ex_mem_insn_type   : insn_type_t                  := OP_ILLEGAL;
-    signal ex_mem_rf_we       : std_logic                    := '0';
-
+    signal ex_mem_load_pc        : std_logic                    := '0';
+    signal ex_mem_next_pc        : word                         := (others => '0');
+    signal ex_mem_alu_out        : word                         := (others => '0');
+    signal ex_mem_return_addr    : word                         := (others => '0');
+    signal ex_mem_pc             : word                         := (others => '0');
+    signal ex_mem_load_type      : load_type_t                  := LOAD_NONE;
+    signal ex_mem_store_type     : store_type_t                 := STORE_NONE;
+    signal ex_mem_rd_addr        : std_logic_vector(4 downto 0) := (others => '0');
+    signal ex_mem_imm            : word                         := (others => '0');
+    signal ex_mem_insn_type      : insn_type_t                  := OP_ILLEGAL;
+    signal ex_mem_rf_we          : std_logic                    := '0';
     signal ex_mem_compare_result : std_logic;
 
     -------------------------------------------------
@@ -130,11 +144,11 @@ begin  -- architecture Behavioral
     -- Detect when stalling is necessary
     -------------------------------------------------
     branch_stall <= '1' when (id_ex_insn_type = OP_JAL or id_ex_insn_type = OP_JALR or
-                (id_ex_insn_type = OP_BRANCH and ex_q.compare_result = '1')) else '0';
-    id_stall     <= hazard_stall or branch_stall;
-    if_kill      <= ex_mem_load_pc or (not insn_valid);
-    id_kill      <= ex_mem_load_pc;
-    full_stall   <= '0';                -- TODO: for now
+                              (id_ex_insn_type = OP_BRANCH and ex_q.compare_result = '1')) else '0';
+    id_stall   <= hazard_stall or branch_stall;
+    if_kill    <= ex_mem_load_pc or (not insn_valid);
+    id_kill    <= ex_mem_load_pc;
+    full_stall <= '0';                  -- TODO: for now
 
     -- Determine when to stall the pipeline because of structural hazards
     hazard_stall <= '1' when (((id_ex_rd_addr = id_q.rs1) and (id_q.rs1 /= "00000") and (id_ex_rf_we = '1') and (id_q.rs1_rd = '1'))
@@ -211,7 +225,7 @@ begin  -- architecture Behavioral
 
     -- determine if the register file will be written as a result of
     -- this instruction
-    id_rf_we <= '1' when ((id_q.insn_type = OP_ALU or id_q.insn_type = OP_LOAD or id_q.insn_type = OP_JALR or id_q.insn_type = OP_JAL) and (id_q.rd /= "00000")) else '0';
+--    id_rf_we <= '1' when ((id_q.insn_type = OP_ALU or id_q.insn_type = OP_LOAD or id_q.insn_type = OP_JALR or id_q.insn_type = OP_JAL) and (id_q.rd /= "00000")) else '0';
 
     ---------------------------------------------------
     -- ID/EX pipeline registers
@@ -226,8 +240,7 @@ begin  -- architecture Behavioral
             id_ex_op1      <= (others => '0');
             id_ex_op2      <= (others => '0');
             id_ex_ir       <= NOP;
-        elsif (rising_edge(clk)) then   -- rising clock edge
-            -- needed for EX stage
+        elsif (rising_edge(clk)) then
             if (id_stall = '0' and full_stall = '0') then
                 id_ex_rs1_addr <= id_q.rs1;
                 id_ex_rs2_addr <= id_q.rs2;
@@ -247,11 +260,11 @@ begin  -- architecture Behavioral
                     id_ex_load_type   <= LOAD_NONE;
                     id_ex_store_type  <= STORE_NONE;
                 else
-                    id_ex_pc       <= if_id_pc;
+                    id_ex_pc          <= if_id_pc;
                     id_ex_ir          <= if_id_ir;
                     id_ex_rd_addr     <= id_q.rd;
                     id_ex_insn_type   <= id_q.insn_type;
-                    id_ex_rf_we       <= id_rf_we;
+                    id_ex_rf_we       <= id_q.rf_we;
                     id_ex_use_imm     <= id_q.use_imm;
                     id_ex_imm         <= id_q.imm;
                     id_ex_alu_func    <= id_q.alu_func;
@@ -326,8 +339,6 @@ begin  -- architecture Behavioral
             ex_mem_insn_type   <= OP_ILLEGAL;
             ex_mem_rf_we       <= '0';
         elsif (rising_edge(clk)) then
-            -- default
-
             if (id_ex_insn_type = OP_JAL or id_ex_insn_type = OP_JALR or
                 (id_ex_insn_type = OP_BRANCH and ex_q.compare_result = '1')) then
                 ex_mem_load_pc <= '1';
@@ -345,7 +356,6 @@ begin  -- architecture Behavioral
             ex_mem_imm         <= id_ex_imm;
             ex_mem_insn_type   <= id_ex_insn_type;
             ex_mem_rf_we       <= id_ex_rf_we;
-            
         end if;
     end process ex_mem_regs_proc;
 
@@ -376,7 +386,7 @@ begin  -- architecture Behavioral
             mem_wb_rd_addr    <= (others => '0');
             mem_wb_rf_we      <= '0';
             mem_wb_alu_output <= (others => '0');
-        elsif (rising_edge(clk)) then   -- rising clock edge
+        elsif (rising_edge(clk)) then
             mem_wb_rd_addr    <= ex_mem_rd_addr;
             mem_wb_rf_we      <= ex_mem_rf_we;
             mem_wb_alu_output <= ex_mem_alu_out;

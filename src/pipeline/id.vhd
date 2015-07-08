@@ -5,8 +5,8 @@ use work.common.all;
 use work.id_pkg.all;
 
 entity instruction_decoder is
-    port (d : in id_in;
-          q : out id_out);   -- decoded data
+    port (d : in  id_in;
+          q : out id_out);              -- decoded data
 end entity instruction_decoder;
 
 architecture behavioral of instruction_decoder is
@@ -19,7 +19,7 @@ architecture behavioral of instruction_decoder is
     -------------------------------------------------
     -- Signals
     -------------------------------------------------
-    
+
     signal decoded : id_out := c_decoded_reset;
 begin  -- architecture behavioral
 
@@ -35,16 +35,18 @@ begin  -- architecture behavioral
         variable opcode   : std_logic_vector(6 downto 0);
         variable funct3   : std_logic_vector(2 downto 0);
         variable imm_type : imm_type_t := IMM_NONE;
-        variable insn : word;
+        variable insn     : word;
+        variable rd       : std_logic_vector(4 downto 0);
     begin  -- process decode_proc
         insn := d.instruction;
+        rd := insn(11 downto 7);
         
         -- defaults & important fields
         opcode              := insn(6 downto 0);
         funct3              := insn(14 downto 12);
         decoded.rs1         <= insn(19 downto 15);
         decoded.rs2         <= insn(24 downto 20);
-        decoded.rd          <= insn(11 downto 7);
+        decoded.rd          <= rd;
         decoded.opcode      <= opcode;
         decoded.rs1_rd      <= '0';
         decoded.rs2_rd      <= '0';
@@ -54,10 +56,9 @@ begin  -- architecture behavioral
         decoded.load_type   <= LOAD_NONE;
         decoded.store_type  <= STORE_NONE;
         decoded.imm         <= (others => '0');
-        decoded.rs1_rd      <= '0';
-        decoded.rs2_rd      <= '0';
         decoded.use_imm     <= '0';
         decoded.branch_type <= BRANCH_NONE;
+        decoded.rf_we       <= '0';
 
         case (opcode) is
             -- Load Upper Immediate
@@ -75,6 +76,9 @@ begin  -- architecture behavioral
                 decoded.insn_type <= OP_JAL;
                 decoded.alu_func  <= ALU_ADD;
                 imm_type          := IMM_J;
+                if (rd /= "00000") then
+                    decoded.rf_we <= '1';
+                end if;
 
             -- Jump And Link Register
             when c_op_jalr =>
@@ -82,6 +86,9 @@ begin  -- architecture behavioral
                 decoded.alu_func  <= ALU_ADD;
                 imm_type          := IMM_I;
                 decoded.rs1_rd    <= '1';
+                if (rd /= "00000") then
+                    decoded.rf_we <= '1';
+                end if;
 
             -- Branch to target address, if condition is met
             when c_op_branch =>
@@ -106,6 +113,9 @@ begin  -- architecture behavioral
                 decoded.insn_type <= OP_LOAD;
                 imm_type          := IMM_I;
                 decoded.rs1_rd    <= '1';
+                if (rd /= "00000") then
+                    decoded.rf_we <= '1';
+                end if;
 
                 case (funct3) is
                     when "000"  => decoded.load_type <= LB;
@@ -137,6 +147,9 @@ begin  -- architecture behavioral
                 imm_type          := IMM_I;
                 decoded.rs1_rd    <= '1';
                 decoded.use_imm   <= '1';
+                if (rd /= "00000") then
+                    decoded.rf_we <= '1';
+                end if;
 
                 case (funct3) is
                     when "000" => decoded.alu_func <= ALU_ADD;
@@ -161,6 +174,9 @@ begin  -- architecture behavioral
                 decoded.insn_type <= OP_ALU;
                 decoded.rs1_rd    <= '1';
                 decoded.rs2_rd    <= '1';
+                if (rd /= "00000") then
+                    decoded.rf_we <= '1';
+                end if;
 
                 case (funct3) is
                     when "000" =>
