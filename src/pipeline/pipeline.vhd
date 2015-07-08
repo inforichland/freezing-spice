@@ -229,7 +229,6 @@ begin  -- architecture Behavioral
         elsif (rising_edge(clk)) then   -- rising clock edge
             -- needed for EX stage
             if (id_stall = '0' and full_stall = '0') then
-                id_ex_pc       <= if_id_pc;
                 id_ex_rs1_addr <= id_q.rs1;
                 id_ex_rs2_addr <= id_q.rs2;
                 id_ex_op1      <= rs1_data;
@@ -248,6 +247,7 @@ begin  -- architecture Behavioral
                     id_ex_load_type   <= LOAD_NONE;
                     id_ex_store_type  <= STORE_NONE;
                 else
+                    id_ex_pc       <= if_id_pc;
                     id_ex_ir          <= if_id_ir;
                     id_ex_rd_addr     <= id_q.rd;
                     id_ex_insn_type   <= id_q.insn_type;

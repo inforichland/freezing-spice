@@ -31,23 +31,14 @@ architecture testbench of pipeline_tb is
     signal done         : boolean := false;
     constant clk_period : time    := 10 ns;  -- 100 MHz
 
-    -- 0 : 00000000010000000000000010010011   ADDI 4, x0, x1    (400093)
-    -- 4 : 00000000100000000000000100010011   ADDI 8, x0, x2    (800113)
-    -- 8 : 00000000001000001000000110110011   ADD  x1, x2, x3   (2081B3)
-    --12 : 00000000000100011001000110010011   SLLI 1, x3, x4    (119213)
-    --16 : 00000100000000000000000001101111   JAL  16, x6       (100036F)
-    --20 : 00000000000000000000000000010011   ADDI 1, x0, x1    (100093)
-    --24 : 00000000000000000000000000010011   NOP               (13)
-    --28 : 00000000000000000000000000010011   NOP
-    --32 : 00000000001100011000000110110011   ADD  x3, x4, x5   (4182B3)
-    --36 : 00000000000000000000000000010011   JAL  0, x0        (6F)
-    type ram_t is array (0 to 63) of word;
+    -- the program memory
+    type ram_t is array (0 to 64) of word;
     constant ram : ram_t := (0      => encode_i_type(I_ADDI, "000000000100", 0, 1),
                              4      => encode_i_type(I_ADDI, "000000001000", 0, 2),
                              8      => encode_r_type(R_ADD, 1, 2, 3),
                              12     => encode_i_shift(I_SLLI, "00001", 3, 4),
                              16     => encode_uj_type(UJ_JAL, "00000000000000010010", 6),
-                             20     => encode_i_type(I_ADDI, "000000000001", 0, 1),
+                             20     => encode_i_type(I_ADDI, "000000000001", 0, 1), -- this should not get executed
                              24     => NOP,
                              28     => NOP,
                              32     => NOP,
@@ -57,6 +48,8 @@ architecture testbench of pipeline_tb is
                              48     => NOP,
                              52     => encode_r_type(R_ADD, 3, 4, 5),
                              56     => encode_uj_type(UJ_JAL, "00000000000000000000", 0),
+                             60     => encode_i_type(I_ADDI, "000000000001", 0, 1), -- this should not get executed
+                             64     => encode_i_type(I_ADDI, "000000000011", 0, 1), -- this should not get executed
                              others => NOP);
 
 begin  -- architecture testbench
