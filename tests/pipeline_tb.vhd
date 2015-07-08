@@ -47,7 +47,7 @@ architecture testbench of pipeline_tb is
                              44     => NOP,
                              48     => NOP,
                              52     => encode_r_type(R_ADD, 3, 4, 5),
-                             56     => encode_uj_type(UJ_JAL, "00000000000000000000", 0),
+                             56     => encode_uj_type(UJ_JAL, "00000000000000000000", 7),
                              60     => encode_i_type(I_ADDI, "000000000001", 0, 1), -- this should not get executed
                              64     => encode_i_type(I_ADDI, "000000000011", 0, 1), -- this should not get executed
                              others => NOP);

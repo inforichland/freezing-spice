@@ -39,8 +39,8 @@ begin  -- architecture behavioral
         variable rd       : std_logic_vector(4 downto 0);
     begin  -- process decode_proc
         insn := d.instruction;
-        rd := insn(11 downto 7);
-        
+        rd   := insn(11 downto 7);
+
         -- defaults & important fields
         opcode              := insn(6 downto 0);
         funct3              := insn(14 downto 12);
@@ -70,6 +70,10 @@ begin  -- architecture behavioral
             when c_op_auipc =>
                 decoded.insn_type <= OP_AUIPC;
                 imm_type          := IMM_U;
+                decoded.alu_func  <= ALU_ADD;
+                if (rd /= "00000") then
+                    decoded.rf_we <= '1';
+                end if;
 
             -- Jump And Link
             when c_op_jal =>
@@ -113,6 +117,7 @@ begin  -- architecture behavioral
                 decoded.insn_type <= OP_LOAD;
                 imm_type          := IMM_I;
                 decoded.rs1_rd    <= '1';
+                decoded.alu_func  <= ALU_ADD;
                 if (rd /= "00000") then
                     decoded.rf_we <= '1';
                 end if;
@@ -130,6 +135,7 @@ begin  -- architecture behavioral
             when c_op_store =>
                 decoded.insn_type <= OP_STORE;
                 imm_type          := IMM_S;
+                decoded.alu_func  <= ALU_ADD;
                 decoded.rs1_rd    <= '1';
                 decoded.rs2_rd    <= '1';
 
@@ -214,10 +220,10 @@ begin  -- architecture behavioral
         -- decode and sign-extend the immediate value
         case imm_type is
             when IMM_I =>
-                for i in 31 downto 11 loop
+                for i in 31 downto 12 loop
                     decoded.imm(i) <= insn(31);
                 end loop;
-                decoded.imm(10 downto 5) <= insn(30 downto 25);
+                decoded.imm(11 downto 5) <= insn(31 downto 25);
                 decoded.imm(4 downto 1)  <= insn(24 downto 21);
                 decoded.imm(0)           <= insn(20);
 

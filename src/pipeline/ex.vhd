@@ -35,7 +35,9 @@ begin  -- architecture Behavioral
     op2 <= ex_d.imm when ((ex_d.insn_type = OP_ALU and ex_d.use_imm = '1') or
                           ex_d.insn_type = OP_BRANCH or
                           ex_d.insn_type = OP_JAL or
-                          ex_d.insn_type = OP_JALR)
+                          ex_d.insn_type = OP_JALR or
+                          ex_d.insn_type = OP_LOAD or
+                          ex_d.insn_type = OP_STORE)
            else ex_d.rs2;
 
     -- ALU
