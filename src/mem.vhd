@@ -13,9 +13,6 @@ end entity memory_stage;
 architecture Behavioral of memory_stage is
 begin  -- architecture Behavioral
 
-    mem_q.data_addr <= mem_d.alu_out;
-    mem_q.we <= '1' when mem_d.insn_type = OP_STORE else '0';
-    mem_q.re <= '1' when mem_d.insn_type = OP_LOAD else '0';
-    mem_q.data_out <= (others => '0'); -- TODO!
+
 
 end architecture Behavioral;
