@@ -65,7 +65,10 @@ begin  -- architecture behavioral
             when c_op_lui =>
                 decoded.insn_type <= OP_LUI;
                 imm_type          := IMM_U;
-
+                if (rd /= "00000") then
+                    decoded.rf_we <= '1';
+                end if;
+                
             -- Add Upper Immediate to PC
             when c_op_auipc =>
                 decoded.insn_type <= OP_AUIPC;

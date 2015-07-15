@@ -28,7 +28,8 @@ begin  -- architecture Behavioral
     -- ALU operand 1 multiplexer
     op1 <= ex_d.npc when (ex_d.insn_type = OP_BRANCH or
                           ex_d.insn_type = OP_JAL or
-                          ex_d.insn_type = OP_JALR)
+                          ex_d.insn_type = OP_JALR or
+                          ex_d.insn_type = OP_AUIPC)
            else ex_d.rs1;
 
     -- ALU operand 2 multiplexer
@@ -37,7 +38,8 @@ begin  -- architecture Behavioral
                           ex_d.insn_type = OP_JAL or
                           ex_d.insn_type = OP_JALR or
                           ex_d.insn_type = OP_LOAD or
-                          ex_d.insn_type = OP_STORE)
+                          ex_d.insn_type = OP_STORE or
+                          ex_d.insn_type = OP_AUIPC)
            else ex_d.rs2;
 
     -- ALU

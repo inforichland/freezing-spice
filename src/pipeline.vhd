@@ -5,7 +5,7 @@
 -- File       : pipeline.vhd
 -- Author     :   Tim Wawrzynczak
 -- Created    : 2015-07-07
--- Last update: 2015-07-09
+-- Last update: 2015-07-14
 -- Platform   : FPGA
 -- Standard   : VHDL'93/02
 -------------------------------------------------------------------------------
@@ -22,8 +22,6 @@
 
 -------------------------------------------------------------------------------
 -- TODO:
---   LUI
---   AUIPC
 --   CSR
 --   Fences
 --   SCALL, SBREAK
@@ -122,7 +120,6 @@ architecture Behavioral of pipeline is
     signal ex_mem_load_type      : load_type_t                  := LOAD_NONE;
     signal ex_mem_store_type     : store_type_t                 := STORE_NONE;
     signal ex_mem_rd_addr        : std_logic_vector(4 downto 0) := (others => '0');
-    signal ex_mem_imm            : word                         := (others => '0');
     signal ex_mem_insn_type      : insn_type_t                  := OP_ILLEGAL;
     signal ex_mem_rf_we          : std_logic                    := '0';
     signal ex_mem_data_addr      : word                         := (others => '0');
@@ -362,15 +359,15 @@ begin  -- architecture Behavioral
             ex_mem_load_type   <= LOAD_NONE;
             ex_mem_store_type  <= STORE_NONE;
             ex_mem_rd_addr     <= (others => '0');
-            ex_mem_imm         <= (others => '0');
             ex_mem_insn_type   <= OP_ILLEGAL;
             ex_mem_rf_we       <= '0';
         elsif (rising_edge(clk)) then
             -- check for branches
+            ex_mem_next_pc <= ex_q.alu_result;
+
             if (id_ex_insn_type = OP_JAL or id_ex_insn_type = OP_JALR or
                 (id_ex_insn_type = OP_BRANCH and ex_q.compare_result = '1')) then
                 ex_mem_load_pc <= '1';
-                ex_mem_next_pc <= ex_q.alu_result;
             else
                 ex_mem_load_pc <= '0';
             end if;
@@ -378,6 +375,8 @@ begin  -- architecture Behavioral
             -- return address for JAL/JALR
             if (id_ex_insn_type = OP_JAL or id_ex_insn_type = OP_JALR) then
                 ex_mem_rf_data <= ex_q.return_addr;
+            elsif (id_ex_insn_type = OP_LUI) then
+                ex_mem_rf_data <= id_ex_imm;
             else
                 ex_mem_rf_data <= ex_q.alu_result;
             end if;
@@ -392,7 +391,6 @@ begin  -- architecture Behavioral
             ex_mem_load_type  <= id_ex_load_type;
             ex_mem_store_type <= id_ex_store_type;
             ex_mem_rd_addr    <= id_ex_rd_addr;
-            ex_mem_imm        <= id_ex_imm;
             ex_mem_insn_type  <= id_ex_insn_type;
             ex_mem_rf_we      <= id_ex_rf_we;
         end if;
