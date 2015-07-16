@@ -5,7 +5,7 @@
 -- File       : pipeline.vhd
 -- Author     :   Tim Wawrzynczak
 -- Created    : 2015-07-07
--- Last update: 2015-07-14
+-- Last update: 2015-07-15
 -- Platform   : FPGA
 -- Standard   : VHDL'93/02
 -------------------------------------------------------------------------------
@@ -27,6 +27,7 @@
 --   SCALL, SBREAK
 
 -- verify:
+--    loads and stores
 --    JALR
 --    Branches
 --    integer ops
@@ -112,18 +113,18 @@ architecture Behavioral of pipeline is
     -------------------------------------------------
     -- EX/MEM pipeline registers
     -------------------------------------------------
-    signal ex_mem_load_pc        : std_logic                    := '0';
-    signal ex_mem_next_pc        : word                         := (others => '0');
-    signal ex_mem_rf_data        : word                         := (others => '0');
-    signal ex_mem_return_addr    : word                         := (others => '0');
-    signal ex_mem_pc             : word                         := (others => '0');
-    signal ex_mem_load_type      : load_type_t                  := LOAD_NONE;
-    signal ex_mem_store_type     : store_type_t                 := STORE_NONE;
-    signal ex_mem_rd_addr        : std_logic_vector(4 downto 0) := (others => '0');
-    signal ex_mem_insn_type      : insn_type_t                  := OP_ILLEGAL;
-    signal ex_mem_rf_we          : std_logic                    := '0';
-    signal ex_mem_data_addr      : word                         := (others => '0');
-    signal ex_mem_data_out       : word                         := (others => '0');
+    signal ex_mem_load_pc     : std_logic                    := '0';
+    signal ex_mem_next_pc     : word                         := (others => '0');
+    signal ex_mem_rf_data     : word                         := (others => '0');
+    signal ex_mem_return_addr : word                         := (others => '0');
+    signal ex_mem_pc          : word                         := (others => '0');
+    signal ex_mem_load_type   : load_type_t                  := LOAD_NONE;
+    signal ex_mem_store_type  : store_type_t                 := STORE_NONE;
+    signal ex_mem_rd_addr     : std_logic_vector(4 downto 0) := (others => '0');
+    signal ex_mem_insn_type   : insn_type_t                  := OP_ILLEGAL;
+    signal ex_mem_rf_we       : std_logic                    := '0';
+    signal ex_mem_data_addr   : word                         := (others => '0');
+    signal ex_mem_data_out    : word                         := (others => '0');
 
     -------------------------------------------------
     -- MEM signals
@@ -136,9 +137,11 @@ architecture Behavioral of pipeline is
     -------------------------------------------------
     -- MEM/WB pipeline registers
     -------------------------------------------------
-    signal mem_wb_rd_addr : std_logic_vector(4 downto 0) := (others => '0');
-    signal mem_wb_rf_we   : std_logic                    := '0';
-    signal mem_wb_rf_data : word                         := (others => '0');
+    signal mem_wb_rd_addr   : std_logic_vector(4 downto 0) := (others => '0');
+    signal mem_wb_rf_we     : std_logic                    := '0';
+    signal mem_wb_rf_data   : word                         := (others => '0');
+    signal mem_wb_insn_type : insn_type_t                  := OP_ILLEGAL;
+    signal mem_wb_lmd       : word                         := (others => '0');
 
     -------------------------------------------------
     -- WB signals
@@ -180,7 +183,7 @@ begin  -- architecture Behavioral
     id_stall   <= hazard_stall or branch_stall;
     if_kill    <= ex_mem_load_pc or (not insn_valid);
     id_kill    <= ex_mem_load_pc;
-    full_stall <= '0';
+    full_stall <= '1' when (ex_mem_insn_type = OP_LOAD and data_in_valid = '0') else '0';
 
     -- Determine when to stall the pipeline because of structural hazards
     hazard_stall <= '1' when (((id_ex_rd_addr = id_q.rs1) and (id_q.rs1 /= "00000") and (id_ex_rf_we = '1') and (id_q.rs1_rd = '1'))
@@ -255,6 +258,8 @@ begin  -- architecture Behavioral
     -- ID/EX pipeline registers
     ---------------------------------------------------
 
+    -- this is where instructions get issued,
+    --   controlled by id_stall, full_stall, and id_kill
     id_ex_reg_proc : process (clk, rst_n) is
     begin  -- process id_ex_reg_proc
         if (rst_n = '0') then           -- asynchronous reset (active low)
@@ -362,37 +367,39 @@ begin  -- architecture Behavioral
             ex_mem_insn_type   <= OP_ILLEGAL;
             ex_mem_rf_we       <= '0';
         elsif (rising_edge(clk)) then
-            -- check for branches
-            ex_mem_next_pc <= ex_q.alu_result;
+            if full_stall = '0' then
+                -- check for branches
+                ex_mem_next_pc <= ex_q.alu_result;
 
-            if (id_ex_insn_type = OP_JAL or id_ex_insn_type = OP_JALR or
-                (id_ex_insn_type = OP_BRANCH and ex_q.compare_result = '1')) then
-                ex_mem_load_pc <= '1';
-            else
-                ex_mem_load_pc <= '0';
+                if (id_ex_insn_type = OP_JAL or id_ex_insn_type = OP_JALR or
+                    (id_ex_insn_type = OP_BRANCH and ex_q.compare_result = '1')) then
+                    ex_mem_load_pc <= '1';
+                else
+                    ex_mem_load_pc <= '0';
+                end if;
+
+                -- return address for JAL/JALR
+                if (id_ex_insn_type = OP_JAL or id_ex_insn_type = OP_JALR) then
+                    ex_mem_rf_data <= ex_q.return_addr;
+                elsif (id_ex_insn_type = OP_LUI) then
+                    ex_mem_rf_data <= id_ex_imm;
+                else
+                    ex_mem_rf_data <= ex_q.alu_result;
+                end if;
+
+                -- memory address for loads / stores
+                if (id_ex_insn_type = OP_LOAD or id_ex_insn_type = OP_STORE) then
+                    ex_mem_data_addr <= ex_q.alu_result;
+                end if;
+
+                ex_mem_data_out   <= id_ex_op2;
+                ex_mem_pc         <= id_ex_pc;
+                ex_mem_load_type  <= id_ex_load_type;
+                ex_mem_store_type <= id_ex_store_type;
+                ex_mem_rd_addr    <= id_ex_rd_addr;
+                ex_mem_insn_type  <= id_ex_insn_type;
+                ex_mem_rf_we      <= id_ex_rf_we;
             end if;
-
-            -- return address for JAL/JALR
-            if (id_ex_insn_type = OP_JAL or id_ex_insn_type = OP_JALR) then
-                ex_mem_rf_data <= ex_q.return_addr;
-            elsif (id_ex_insn_type = OP_LUI) then
-                ex_mem_rf_data <= id_ex_imm;
-            else
-                ex_mem_rf_data <= ex_q.alu_result;
-            end if;
-
-            -- memory address for loads / stores
-            if (id_ex_insn_type = OP_LOAD or id_ex_insn_type = OP_STORE) then
-                ex_mem_data_addr <= ex_q.alu_result;
-            end if;
-
-            ex_mem_data_out   <= id_ex_op2;
-            ex_mem_pc         <= id_ex_pc;
-            ex_mem_load_type  <= id_ex_load_type;
-            ex_mem_store_type <= id_ex_store_type;
-            ex_mem_rd_addr    <= id_ex_rd_addr;
-            ex_mem_insn_type  <= id_ex_insn_type;
-            ex_mem_rf_we      <= id_ex_rf_we;
         end if;
     end process ex_mem_regs_proc;
 
@@ -416,13 +423,24 @@ begin  -- architecture Behavioral
     mem_wb_regs : process (clk, rst_n) is
     begin  -- process mem_wb_regs
         if (rst_n = '0') then           -- asynchronous reset (active low)
-            mem_wb_rd_addr <= (others => '0');
-            mem_wb_rf_we   <= '0';
-            mem_wb_rf_data <= (others => '0');
+            mem_wb_rd_addr   <= (others => '0');
+            mem_wb_rf_we     <= '0';
+            mem_wb_rf_data   <= (others => '0');
+            mem_wb_insn_type <= OP_ILLEGAL;
         elsif (rising_edge(clk)) then
-            mem_wb_rd_addr <= ex_mem_rd_addr;
-            mem_wb_rf_we   <= ex_mem_rf_we;
-            mem_wb_rf_data <= ex_mem_rf_data;
+            if (full_stall = '0') then
+                
+                mem_wb_rd_addr   <= ex_mem_rd_addr;
+                mem_wb_rf_we     <= ex_mem_rf_we;
+                mem_wb_rf_data   <= ex_mem_rf_data;
+                mem_wb_insn_type <= ex_mem_insn_type;
+
+                if (data_in_valid = '1') then
+                    mem_wb_lmd <= data_in;
+                end if;
+            else
+                mem_wb_rf_we <= '0';
+            end if;
         end if;
     end process mem_wb_regs;
 
@@ -431,7 +449,7 @@ begin  -- architecture Behavioral
     ---------------------------------------------------
     wb_rf_wr_addr <= mem_wb_rd_addr;
     wb_rf_wr_en   <= mem_wb_rf_we;
---    wb_rf_wr_data <= mem_wb_regs_lmd when (mem_wb_regs_insn_type = OP_LOAD) else mem_wb_regs_alu_output;
-    wb_rf_wr_data <= mem_wb_rf_data;
+    wb_rf_wr_data <= mem_wb_lmd when (mem_wb_insn_type = OP_LOAD) else mem_wb_rf_data;
+--    wb_rf_wr_data <= mem_wb_rf_data;
 
 end architecture Behavioral;
