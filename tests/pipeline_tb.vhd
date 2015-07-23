@@ -48,15 +48,17 @@ architecture testbench of pipeline_tb is
                              48     => NOP,
                              52     => encode_r_type(R_ADD, 3, 4, 5),                      -- ADD x3, x4, x5
                              56     => encode_u_type(U_AUIPC, "10000000000000000001", 8),  -- AUIPC 0x80001, x8
-                             60     => encode_i_type(I_LW, "000000000000", 0, 9),          -- LW x0, x9, 0
-                             64     => encode_r_type(R_ADD, 8, 9, 10),                     -- ADD x8, x9, x10
-                             68     => encode_uj_type(UJ_JAL, "00000000000000000000", 7),  -- JAL 0, x7
-                             72     => encode_i_type(I_ADDI, "000000000001", 0, 1),  -- ADDI x0, x1, 1     -- this should not get executed
-                             76     => encode_i_type(I_ADDI, "000000000011", 0, 1),  -- ADDI x0, x1, 3     -- this should not get executed
+                             -- should store the value in x8 into address 8 (offset 4 + value in x1 (4))
+                             60     => encode_s_type(S_SB, "000000000100", 1, 8),          -- SW x1, x8, 4
+                             64     => encode_i_type(I_LHU, "000000000000", 0, 9),          -- LW x0, x9, 0
+                             68     => encode_r_type(R_ADD, 8, 9, 10),                     -- ADD x8, x9, x10
+                             72     => encode_uj_type(UJ_JAL, "00000000000000000000", 7),  -- JAL 0, x7
+                             76     => encode_i_type(I_ADDI, "000000000001", 0, 1),  -- ADDI x0, x1, 1     -- this should not get executed
+                             80     => encode_i_type(I_ADDI, "000000000011", 0, 1),  -- ADDI x0, x1, 3     -- this should not get executed
                              others => NOP);
-
+    
     -- data memory
-    signal ram : ram_t := (0      => "10000000000000000000000000000001",
+    signal ram : ram_t := (0      => "10000000000000001000000010000001",
                            others => (others => '0'));
 
     signal aux_addr : std_logic_vector(6 downto 0) := (others => '0');
@@ -82,24 +84,6 @@ begin
 
     -- create a clock
     clk <= '0' when done else (not clk) after clk_period / 2;
-
-    ---- purpose: instruction memory
-    --rom_proc : process (clk, rst_n) is
-    --    variable l : line;
-    --begin  -- process ram_proc
-    --    if rst_n = '0' then
-    --        insn_in    <= (others => '0');
-    --        insn_valid <= '0';
-    --    elsif rising_edge(clk) then
-    --        insn_valid <= '1';
-
-    --        if (to_integer(unsigned(insn_addr)) <= to_integer(to_unsigned(rom'high, 32))) then
-    --            insn_in <= rom(to_integer(unsigned(insn_addr)));
-    --        else
-    --            insn_in <= NOP;
-    --        end if;
-    --    end if;
-    --end process rom_proc;
 
     -- purpose: data memory
     ram_proc : process (clk, rst_n) is
@@ -146,6 +130,7 @@ begin
         -- reset sequence        
         println ("Beginning simulation");
 
+        -- fill up the instruction memory
         rst_n <= '0';
         aux_write <= '1';
         while i <= ram'high loop

@@ -5,7 +5,7 @@
 -- File       : pipeline.vhd
 -- Author     :   Tim Wawrzynczak
 -- Created    : 2015-07-07
--- Last update: 2015-07-15
+-- Last update: 2015-07-22
 -- Platform   : FPGA
 -- Standard   : VHDL'93/02
 -------------------------------------------------------------------------------
@@ -27,7 +27,6 @@
 --   SCALL, SBREAK
 
 -- verify:
---    loads and stores
 --    JALR
 --    Branches
 --    integer ops
@@ -410,10 +409,13 @@ begin  -- architecture Behavioral
     -- TODO! loads and stores
 
     -- memory access logic
-    mem_we        <= '1' when ex_mem_insn_type = OP_STORE else '0';
-    mem_re        <= '1' when ex_mem_insn_type = OP_LOAD  else '0';
+    mem_we <= '1' when ex_mem_insn_type = OP_STORE else '0';
+    mem_re <= '1' when ex_mem_insn_type = OP_LOAD  else '0';
+
     mem_data_addr <= ex_mem_data_addr;
-    mem_data_out  <= ex_mem_data_out;
+    mem_data_out  <= X"0000" & ex_mem_data_out(15 downto 0) when ex_mem_store_type = SH else
+                     X"000000" & ex_mem_data_out(7 downto 0) when ex_mem_store_type = SB else
+                     ex_mem_data_out;
 
     ---------------------------------------------------
     -- MEM/WB pipeline registers
@@ -429,14 +431,26 @@ begin  -- architecture Behavioral
             mem_wb_insn_type <= OP_ILLEGAL;
         elsif (rising_edge(clk)) then
             if (full_stall = '0') then
-                
                 mem_wb_rd_addr   <= ex_mem_rd_addr;
                 mem_wb_rf_we     <= ex_mem_rf_we;
-                mem_wb_rf_data   <= ex_mem_rf_data;
                 mem_wb_insn_type <= ex_mem_insn_type;
+                mem_wb_rf_data   <= ex_mem_rf_data;
 
                 if (data_in_valid = '1') then
-                    mem_wb_lmd <= data_in;
+                    if (ex_mem_load_type = LHU) then
+                        mem_wb_lmd <= X"0000" & data_in(15 downto 0);
+                    elsif (ex_mem_load_type = LBU) then
+                        mem_wb_lmd <= X"000000" & data_in(7 downto 0);
+                    elsif (ex_mem_load_type = LH) then
+                        mem_wb_lmd <= data_in(15) & data_in(15) & data_in(15) & data_in(15) & data_in(15) & data_in(15) & data_in(15) & data_in(15) &
+                                      data_in(15) & data_in(15) & data_in(15) & data_in(15) & data_in(15) & data_in(15) & data_in(15) & data_in(15) & data_in(15 downto 0);
+                    elsif (ex_mem_load_type = LB) then
+                        mem_wb_lmd <= data_in(7) & data_in(7) & data_in(7) & data_in(7) & data_in(7) & data_in(7) & data_in(7) & data_in(7) &
+                                      data_in(7) & data_in(7) & data_in(7) & data_in(7) & data_in(7) & data_in(7) & data_in(7) & data_in(7) &
+                                      data_in(7) & data_in(7) & data_in(7) & data_in(7) & data_in(7) & data_in(7) & data_in(7) & data_in(7) & data_in(7 downto 0);
+                    else
+                        mem_wb_lmd <= data_in;
+                    end if;
                 end if;
             else
                 mem_wb_rf_we <= '0';
