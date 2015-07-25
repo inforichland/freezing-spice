@@ -5,7 +5,7 @@
 -- File       : pipeline.vhd
 -- Author     :   Tim Wawrzynczak
 -- Created    : 2015-07-07
--- Last update: 2015-07-22
+-- Last update: 2015-07-24
 -- Platform   : FPGA
 -- Standard   : VHDL'93/02
 -------------------------------------------------------------------------------
@@ -106,8 +106,11 @@ architecture Behavioral of pipeline is
     -------------------------------------------------
     -- EX signals
     -------------------------------------------------
-    signal ex_d : ex_in;
-    signal ex_q : ex_out;
+    signal ex_d         : ex_in;
+    signal ex_q         : ex_out;
+    signal ex_rf_data   : word;
+    signal ex_load_pc   : std_logic;
+    signal ex_data_addr : word;
 
     -------------------------------------------------
     -- EX/MEM pipeline registers
@@ -132,6 +135,9 @@ architecture Behavioral of pipeline is
     signal mem_re        : std_logic;
     signal mem_data_addr : word;
     signal mem_data_out  : word;
+    signal mem_lmd_lh    : word;
+    signal mem_lmd_lb    : word;
+    signal mem_lmd       : word;
 
     -------------------------------------------------
     -- MEM/WB pipeline registers
@@ -288,6 +294,7 @@ begin  -- architecture Behavioral
                     id_ex_load_type   <= LOAD_NONE;
                     id_ex_store_type  <= STORE_NONE;
                 else
+                    -- instruction issue
                     id_ex_pc          <= if_id_pc;
                     id_ex_ir          <= if_id_ir;
                     id_ex_rd_addr     <= id_q.rd;
@@ -347,6 +354,18 @@ begin  -- architecture Behavioral
     ex_stage : entity work.instruction_executor(Behavioral)
         port map (ex_d, ex_q);
 
+    -- multiplexer for Register File write data
+    ex_rf_data <= ex_q.return_addr when (id_ex_insn_type = OP_JAL or id_ex_insn_type = OP_JALR) else
+                  id_ex_imm when (id_ex_insn_type = OP_LUI) else
+                  ex_q.alu_result;
+    
+    -- selectrr for loading the PC with a new value
+    ex_load_pc <= '1' when (id_ex_insn_type = OP_JAL or id_ex_insn_type = OP_JALR or
+                            (id_ex_insn_type = OP_BRANCH and ex_q.compare_result = '1')) else '0';
+
+    -- multiplexer for data memory address
+    ex_data_addr <= ex_q.alu_result when (id_ex_insn_type = OP_LOAD or id_ex_insn_type = OP_STORE) else ex_mem_data_addr;
+
     ---------------------------------------------------
     -- EX/MEM pipeline registers
     ---------------------------------------------------
@@ -366,31 +385,11 @@ begin  -- architecture Behavioral
             ex_mem_insn_type   <= OP_ILLEGAL;
             ex_mem_rf_we       <= '0';
         elsif (rising_edge(clk)) then
-            if full_stall = '0' then
-                -- check for branches
-                ex_mem_next_pc <= ex_q.alu_result;
-
-                if (id_ex_insn_type = OP_JAL or id_ex_insn_type = OP_JALR or
-                    (id_ex_insn_type = OP_BRANCH and ex_q.compare_result = '1')) then
-                    ex_mem_load_pc <= '1';
-                else
-                    ex_mem_load_pc <= '0';
-                end if;
-
-                -- return address for JAL/JALR
-                if (id_ex_insn_type = OP_JAL or id_ex_insn_type = OP_JALR) then
-                    ex_mem_rf_data <= ex_q.return_addr;
-                elsif (id_ex_insn_type = OP_LUI) then
-                    ex_mem_rf_data <= id_ex_imm;
-                else
-                    ex_mem_rf_data <= ex_q.alu_result;
-                end if;
-
-                -- memory address for loads / stores
-                if (id_ex_insn_type = OP_LOAD or id_ex_insn_type = OP_STORE) then
-                    ex_mem_data_addr <= ex_q.alu_result;
-                end if;
-
+            if (full_stall = '0') then
+                ex_mem_next_pc    <= ex_q.alu_result;
+                ex_mem_load_pc    <= ex_load_pc;
+                ex_mem_rf_data    <= ex_rf_data;
+                ex_mem_data_addr  <= ex_data_addr;
                 ex_mem_data_out   <= id_ex_op2;
                 ex_mem_pc         <= id_ex_pc;
                 ex_mem_load_type  <= id_ex_load_type;
@@ -406,16 +405,33 @@ begin  -- architecture Behavioral
     -- Memory stage
     ---------------------------------------------------
 
-    -- TODO! loads and stores
-
     -- memory access logic
     mem_we <= '1' when ex_mem_insn_type = OP_STORE else '0';
     mem_re <= '1' when ex_mem_insn_type = OP_LOAD  else '0';
 
+    -- data memory interface multiplexers
     mem_data_addr <= ex_mem_data_addr;
     mem_data_out  <= X"0000" & ex_mem_data_out(15 downto 0) when ex_mem_store_type = SH else
                      X"000000" & ex_mem_data_out(7 downto 0) when ex_mem_store_type = SB else
                      ex_mem_data_out;
+
+    -- if the load is a signed halfword
+    mem_lmd_lh <= data_in(15) & data_in(15) & data_in(15) & data_in(15) & data_in(15) & data_in(15) & data_in(15) & data_in(15) &
+                  data_in(15) & data_in(15) & data_in(15) & data_in(15) & data_in(15) & data_in(15) & data_in(15) & data_in(15) & data_in(15 downto 0);
+
+    -- if the load is a signed byte
+    mem_lmd_lb <= data_in(7) & data_in(7) & data_in(7) & data_in(7) & data_in(7) & data_in(7) & data_in(7) & data_in(7) &
+                  data_in(7) & data_in(7) & data_in(7) & data_in(7) & data_in(7) & data_in(7) & data_in(7) & data_in(7) &
+                  data_in(7) & data_in(7) & data_in(7) & data_in(7) & data_in(7) & data_in(7) & data_in(7) & data_in(7) & data_in(7 downto 0);
+
+    -- Load Memory Data register input
+    with ex_mem_load_type select
+        mem_lmd <=
+        X"0000" & data_in(15 downto 0)  when LHU,
+        X"000000" & data_in(7 downto 0) when LBU,
+        mem_lmd_lh                      when LH,
+        mem_lmd_lb                      when LB,
+        data_in                         when others;
 
     ---------------------------------------------------
     -- MEM/WB pipeline registers
@@ -437,20 +453,7 @@ begin  -- architecture Behavioral
                 mem_wb_rf_data   <= ex_mem_rf_data;
 
                 if (data_in_valid = '1') then
-                    if (ex_mem_load_type = LHU) then
-                        mem_wb_lmd <= X"0000" & data_in(15 downto 0);
-                    elsif (ex_mem_load_type = LBU) then
-                        mem_wb_lmd <= X"000000" & data_in(7 downto 0);
-                    elsif (ex_mem_load_type = LH) then
-                        mem_wb_lmd <= data_in(15) & data_in(15) & data_in(15) & data_in(15) & data_in(15) & data_in(15) & data_in(15) & data_in(15) &
-                                      data_in(15) & data_in(15) & data_in(15) & data_in(15) & data_in(15) & data_in(15) & data_in(15) & data_in(15) & data_in(15 downto 0);
-                    elsif (ex_mem_load_type = LB) then
-                        mem_wb_lmd <= data_in(7) & data_in(7) & data_in(7) & data_in(7) & data_in(7) & data_in(7) & data_in(7) & data_in(7) &
-                                      data_in(7) & data_in(7) & data_in(7) & data_in(7) & data_in(7) & data_in(7) & data_in(7) & data_in(7) &
-                                      data_in(7) & data_in(7) & data_in(7) & data_in(7) & data_in(7) & data_in(7) & data_in(7) & data_in(7) & data_in(7 downto 0);
-                    else
-                        mem_wb_lmd <= data_in;
-                    end if;
+                    mem_wb_lmd <= mem_lmd;
                 end if;
             else
                 mem_wb_rf_we <= '0';
@@ -464,6 +467,5 @@ begin  -- architecture Behavioral
     wb_rf_wr_addr <= mem_wb_rd_addr;
     wb_rf_wr_en   <= mem_wb_rf_we;
     wb_rf_wr_data <= mem_wb_lmd when (mem_wb_insn_type = OP_LOAD) else mem_wb_rf_data;
---    wb_rf_wr_data <= mem_wb_rf_data;
 
 end architecture Behavioral;

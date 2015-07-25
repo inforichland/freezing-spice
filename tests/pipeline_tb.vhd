@@ -49,12 +49,15 @@ architecture testbench of pipeline_tb is
                              52     => encode_r_type(R_ADD, 3, 4, 5),                      -- ADD x3, x4, x5
                              56     => encode_u_type(U_AUIPC, "10000000000000000001", 8),  -- AUIPC 0x80001, x8
                              -- should store the value in x8 into address 8 (offset 4 + value in x1 (4))
-                             60     => encode_s_type(S_SB, "000000000100", 1, 8),          -- SW x1, x8, 4
-                             64     => encode_i_type(I_LHU, "000000000000", 0, 9),          -- LW x0, x9, 0
+                             60     => encode_s_type(S_SW, "000000000100", 1, 8),          -- SW x1, x8, 4
+                             64     => encode_i_type(I_LH, "000000001000", 0, 9),          -- LH x0, x9, 8
                              68     => encode_r_type(R_ADD, 8, 9, 10),                     -- ADD x8, x9, x10
                              72     => encode_uj_type(UJ_JAL, "00000000000000000000", 7),  -- JAL 0, x7
                              76     => encode_i_type(I_ADDI, "000000000001", 0, 1),  -- ADDI x0, x1, 1     -- this should not get executed
                              80     => encode_i_type(I_ADDI, "000000000011", 0, 1),  -- ADDI x0, x1, 3     -- this should not get executed
+                             84     => encode_i_type(I_ADDI, "000000000011", 0, 1),  -- ADDI x0, x1, 3     -- this should not get executed
+                             88     => encode_i_type(I_ADDI, "000000000011", 0, 1),  -- ADDI x0, x1, 3     -- this should not get executed
+                             92     => encode_i_type(I_ADDI, "000000000011", 0, 1),  -- ADDI x0, x1, 3     -- this should not get executed
                              others => NOP);
     
     -- data memory
@@ -64,7 +67,6 @@ architecture testbench of pipeline_tb is
     signal aux_addr : std_logic_vector(6 downto 0) := (others => '0');
     signal aux_in : word;
     signal aux_write : std_logic := '0';
-    
 begin
 
     instruction_memory : entity work.dpram(rtl)
@@ -148,7 +150,7 @@ begin
         insn_valid <= '1';
 
         -- begin stimulus
-        wait for clk_period * 30;
+        wait for clk_period * 40;
 
         -- finished with simulation
         ----------------------------------------------------------------
