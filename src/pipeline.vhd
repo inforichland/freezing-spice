@@ -5,7 +5,7 @@
 -- File       : pipeline.vhd
 -- Author     :   Tim Wawrzynczak
 -- Created    : 2015-07-07
--- Last update: 2015-07-24
+-- Last update: 2015-07-27
 -- Platform   : FPGA
 -- Standard   : VHDL'93/02
 -------------------------------------------------------------------------------
@@ -119,7 +119,6 @@ architecture Behavioral of pipeline is
     signal ex_mem_next_pc     : word                         := (others => '0');
     signal ex_mem_rf_data     : word                         := (others => '0');
     signal ex_mem_return_addr : word                         := (others => '0');
-    signal ex_mem_pc          : word                         := (others => '0');
     signal ex_mem_load_type   : load_type_t                  := LOAD_NONE;
     signal ex_mem_store_type  : store_type_t                 := STORE_NONE;
     signal ex_mem_rd_addr     : std_logic_vector(4 downto 0) := (others => '0');
@@ -359,7 +358,7 @@ begin  -- architecture Behavioral
                   id_ex_imm when (id_ex_insn_type = OP_LUI) else
                   ex_q.alu_result;
     
-    -- selectrr for loading the PC with a new value
+    -- selecter for loading the PC with a new value
     ex_load_pc <= '1' when (id_ex_insn_type = OP_JAL or id_ex_insn_type = OP_JALR or
                             (id_ex_insn_type = OP_BRANCH and ex_q.compare_result = '1')) else '0';
 
@@ -378,7 +377,6 @@ begin  -- architecture Behavioral
             ex_mem_next_pc     <= (others => '0');
             ex_mem_rf_data     <= (others => '0');
             ex_mem_return_addr <= (others => '0');
-            ex_mem_pc          <= (others => '0');
             ex_mem_load_type   <= LOAD_NONE;
             ex_mem_store_type  <= STORE_NONE;
             ex_mem_rd_addr     <= (others => '0');
@@ -391,7 +389,6 @@ begin  -- architecture Behavioral
                 ex_mem_rf_data    <= ex_rf_data;
                 ex_mem_data_addr  <= ex_data_addr;
                 ex_mem_data_out   <= id_ex_op2;
-                ex_mem_pc         <= id_ex_pc;
                 ex_mem_load_type  <= id_ex_load_type;
                 ex_mem_store_type <= id_ex_store_type;
                 ex_mem_rd_addr    <= id_ex_rd_addr;
