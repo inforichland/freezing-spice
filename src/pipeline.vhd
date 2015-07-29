@@ -5,7 +5,7 @@
 -- File       : pipeline.vhd
 -- Author     :   Tim Wawrzynczak
 -- Created    : 2015-07-07
--- Last update: 2015-07-27
+-- Last update: 2015-07-28
 -- Platform   : FPGA
 -- Standard   : VHDL'93/02
 -------------------------------------------------------------------------------
@@ -17,19 +17,6 @@
 --   Register File Writeback
 -------------------------------------------------------------------------------
 -- Copyright (c) 2015 
--------------------------------------------------------------------------------
-
-
--------------------------------------------------------------------------------
--- TODO:
---   CSR
---   Fences
---   SCALL, SBREAK
-
--- verify:
---    JALR
---    Branches
---    integer ops
 -------------------------------------------------------------------------------
 
 library ieee;
@@ -231,7 +218,6 @@ begin  -- architecture Behavioral
                 end if;
 
                 if_id_pc <= if_q.pc;
-                
             end if;
         end if;
     end process if_id_reg_proc;

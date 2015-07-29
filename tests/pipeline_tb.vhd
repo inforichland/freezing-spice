@@ -52,12 +52,13 @@ architecture testbench of pipeline_tb is
                              60     => encode_s_type(S_SW, "000000000100", 1, 8),          -- SW x1, x8, 4
                              64     => encode_i_type(I_LH, "000000001000", 0, 9),          -- LH x0, x9, 8
                              68     => encode_r_type(R_ADD, 8, 9, 10),                     -- ADD x8, x9, x10
-                             72     => encode_uj_type(UJ_JAL, "00000000000000000000", 7),  -- JAL 0, x7
+                             72     => encode_sb_type(SB_BNE, "111111111110",  9, 8),      -- BNE x9, x8, -4
+--                             72     => encode_uj_type(UJ_JAL, "00000000000000000000", 7),  -- JAL x7, 0
                              76     => encode_i_type(I_ADDI, "000000000001", 0, 1),  -- ADDI x0, x1, 1     -- this should not get executed
                              80     => encode_i_type(I_ADDI, "000000000011", 0, 1),  -- ADDI x0, x1, 3     -- this should not get executed
-                             84     => encode_i_type(I_ADDI, "000000000011", 0, 1),  -- ADDI x0, x1, 3     -- this should not get executed
-                             88     => encode_i_type(I_ADDI, "000000000011", 0, 1),  -- ADDI x0, x1, 3     -- this should not get executed
-                             92     => encode_i_type(I_ADDI, "000000000011", 0, 1),  -- ADDI x0, x1, 3     -- this should not get executed
+                             84     => encode_i_type(I_ADDI, "000000000111", 0, 1),  -- ADDI x0, x1, 3     -- this should not get executed
+                             88     => encode_i_type(I_ADDI, "000000001111", 0, 1),  -- ADDI x0, x1, 3     -- this should not get executed
+                             92     => encode_i_type(I_ADDI, "000000011111", 0, 1),  -- ADDI x0, x1, 3     -- this should not get executed
                              others => NOP);
     
     -- data memory
@@ -150,7 +151,7 @@ begin
         insn_valid <= '1';
 
         -- begin stimulus
-        wait for clk_period * 40;
+        wait for clk_period * 45;
 
         -- finished with simulation
         ----------------------------------------------------------------
