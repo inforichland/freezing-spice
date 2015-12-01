@@ -5,7 +5,7 @@
 -- File       : pipeline.vhd
 -- Author     :   Tim Wawrzynczak
 -- Created    : 2015-07-07
--- Last update: 2015-11-30
+-- Last update: 2015-12-01
 -- Platform   : FPGA
 -- Standard   : VHDL'93/02
 -------------------------------------------------------------------------------
@@ -176,13 +176,13 @@ begin  -- architecture Behavioral
     branch_stall <= '1' when (id_ex_insn_type = OP_JAL or id_ex_insn_type = OP_JALR or
                               (id_ex_insn_type = OP_BRANCH and ex_q.compare_result = '1')) else '0';
     id_stall   <= load_stall or branch_stall;
-    if_kill    <= ex_mem_load_pc or (not insn_valid);
-    id_kill    <= ex_mem_load_pc;
+    if_kill    <= ex_mem_load_pc or (not insn_valid) or load_stall;
+    id_kill    <= ex_mem_load_pc or load_stall;
     full_stall <= '1' when (ex_mem_insn_type = OP_LOAD and data_in_valid = '0') else '0';
 
     -- Determine when to stall the pipeline because of an instruction using the result of a load
-    load_stall <= '1' when (((ex_mem_insn_type = OP_LOAD) and (id_ex_rd_addr = id_q.rs1) and (id_ex_rd_addr /= "00000") and (id_q.rs1_rd = '1')) or
-                            ((ex_mem_insn_type = OP_LOAD) and (id_ex_rd_addr = id_q.rs2) and (id_ex_rd_addr /= "00000") and (id_q.rs2_rd = '1')))
+    load_stall <= '1' when (((ex_mem_insn_type = OP_LOAD) and (ex_mem_rd_addr = id_q.rs1) and (id_ex_rd_addr /= "00000") and (id_q.rs1_rd = '1')) or
+                            ((ex_mem_insn_type = OP_LOAD) and (ex_mem_rd_addr = id_q.rs2) and (id_ex_rd_addr /= "00000") and (id_q.rs2_rd = '1')))
                   else '0';
 
     ---------------------------------------------------
@@ -271,8 +271,8 @@ begin  -- architecture Behavioral
             if (id_stall = '0' and full_stall = '0') then
                 id_ex_rs1_addr <= id_q.rs1;
                 id_ex_rs2_addr <= id_q.rs2;
-                id_ex_op1      <= id_op1;  --rs1_data;
-                id_ex_op2      <= id_op2;  --rs2_data;
+                id_ex_op1      <= id_op1;
+                id_ex_op2      <= id_op2;
                 id_ex_use_imm  <= id_q.use_imm;
 
                 if (id_kill = '1') then
@@ -335,12 +335,12 @@ begin  -- architecture Behavioral
     ---------------------------------------------------
     -- Instruction execution stage
     ---------------------------------------------------
-
-    -- inputs
+    
+    -- inputs (includes multiplexers for operand inputs from the LMD "Load Memory Data" register)
     ex_d.insn_type   <= id_ex_insn_type;
     ex_d.npc         <= id_ex_pc;
-    ex_d.rs1         <= id_ex_op1;
-    ex_d.rs2         <= id_ex_op2;
+    ex_d.rs1         <= mem_lmd when (id_ex_rs1_addr = ex_mem_rd_addr and ex_mem_insn_type = OP_LOAD) else id_ex_op1;
+    ex_d.rs2         <= mem_lmd when (id_ex_rs2_addr = ex_mem_rd_addr and ex_mem_insn_type = OP_LOAD) else id_ex_op2;
     ex_d.use_imm     <= id_ex_use_imm;
     ex_d.alu_func    <= id_ex_alu_func;
     ex_d.branch_type <= id_ex_branch_type;
