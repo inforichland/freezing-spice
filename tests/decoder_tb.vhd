@@ -1,7 +1,7 @@
 library ieee;
 use ieee.std_logic_1164.all;
 
-use work.decode_pkg.all;
+use work.id_pkg.all;
 use work.common.all;
 use work.encode_pkg.all;
 

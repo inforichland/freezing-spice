@@ -4,7 +4,7 @@ GHDLRUNFLAGS=
 
 # Correct order is crucial to avoid ghdl error
 SRC_PATH = src/
-SRC = $(addprefix $(SRC_PATH), common.vhd decode_pkg.vhd decode.vhd encode_pkg.vhd alu.vhd compare_unit.vhd ex_pkg.vhd ex.vhd id_pkg.vhd id.vhd if_pkg.vhd if.vhd regfile.vhd pipeline.vhd dpram.vhd)
+SRC = $(addprefix $(SRC_PATH), common.vhd id_pkg.vhd decode.vhd encode_pkg.vhd alu.vhd compare_unit.vhd ex_pkg.vhd ex.vhd id.vhd if_pkg.vhd if.vhd regfile.vhd pipeline.vhd dpram.vhd)
 
 #Name of each test
 TESTS_PATH = tests/

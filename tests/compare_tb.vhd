@@ -3,7 +3,7 @@ use ieee.std_logic_1164.all;
 use std.textio.all;
 
 use work.common.all;
-use work.decode_pkg.all;
+use work.id_pkg.all;
 
 entity compare_tb is
 end entity compare_tb;
