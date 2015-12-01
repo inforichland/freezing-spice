@@ -4,7 +4,7 @@ use ieee.numeric_std.all;
 use std.textio.all;
 
 use work.common.all;
-use work.decode_pkg.all;
+use work.id_pkg.all;
 use work.encode_pkg.all;
 
 entity pipeline_tb is
@@ -50,9 +50,13 @@ architecture testbench of pipeline_tb is
                              56     => encode_u_type(U_AUIPC, "10000000000000000001", 8),  -- AUIPC 0x80001, x8
                              -- should store the value in x8 into address 8 (offset 4 + value in x1 (4))
                              60     => encode_s_type(S_SW, "000000000100", 1, 8),          -- SW x1, x8, 4
+                             -- load the halfword value that was just stored (into address 8) into register 9
                              64     => encode_i_type(I_LH, "000000001000", 0, 9),          -- LH x0, x9, 8
                              68     => encode_r_type(R_ADD, 8, 9, 10),                     -- ADD x8, x9, x10
+                             -- loop back to the previous address
                              72     => encode_sb_type(SB_BNE, "111111111110",  9, 8),      -- BNE x9, x8, -4
+
+
 --                             72     => encode_uj_type(UJ_JAL, "00000000000000000000", 7),  -- JAL x7, 0
                              76     => encode_i_type(I_ADDI, "000000000001", 0, 1),  -- ADDI x0, x1, 1     -- this should not get executed
                              80     => encode_i_type(I_ADDI, "000000000011", 0, 1),  -- ADDI x0, x1, 3     -- this should not get executed

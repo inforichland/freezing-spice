@@ -5,8 +5,8 @@ use work.common.all;
 use work.id_pkg.all;
 
 entity instruction_decoder is
-    port (d : in  id_in;
-          q : out id_out);              -- decoded data
+    port (d : in  word;
+          q : out decoded_t);              -- decoded data
 end entity instruction_decoder;
 
 architecture behavioral of instruction_decoder is
@@ -20,7 +20,7 @@ architecture behavioral of instruction_decoder is
     -- Signals
     -------------------------------------------------
 
-    signal decoded : id_out := c_decoded_reset;
+    signal decoded : decoded_t := c_decoded_reset;
 begin  -- architecture behavioral
 
     -------------------------------------------------
@@ -38,7 +38,7 @@ begin  -- architecture behavioral
         variable insn     : word;
         variable rd       : std_logic_vector(4 downto 0);
     begin  -- process decode_proc
-        insn := d.instruction;
+        insn := d;
         rd   := insn(11 downto 7);
 
         -- defaults & important fields

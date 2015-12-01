@@ -10,7 +10,7 @@ package id_pkg is
     end record id_in;
 
     -- structure for decoded instruction    
-    type id_out is record
+    type decoded_t is record
         alu_func    : alu_func_t;
         op2_src     : std_logic;
         insn_type   : insn_type_t;
@@ -26,23 +26,23 @@ package id_pkg is
         rs2_rd      : std_logic;
         use_imm     : std_logic;
         rf_we       : std_logic;
-    end record id_out;
+    end record decoded_t;
 
-    constant c_decoded_reset : id_out := (alu_func    => ALU_NONE,
-                                          op2_src     => '0',
-                                          insn_type   => OP_ILLEGAL,
-                                          branch_type => BRANCH_NONE,
-                                          load_type   => LOAD_NONE,
-                                          store_type  => STORE_NONE,
-                                          rs1         => "00000",
-                                          rs2         => "00000",
-                                          rd          => "00000",
-                                          imm         => (others => '0'),
-                                          opcode      => (others => 'X'),
-                                          rs1_rd      => '0',
-                                          rs2_rd      => '0',
-                                          use_imm     => '0',
-                                          rf_we       => '0');
+    constant c_decoded_reset : decoded_t := (alu_func    => ALU_NONE,
+                                             op2_src     => '0',
+                                             insn_type   => OP_ILLEGAL,
+                                             branch_type => BRANCH_NONE,
+                                             load_type   => LOAD_NONE,
+                                             store_type  => STORE_NONE,
+                                             rs1         => "00000",
+                                             rs2         => "00000",
+                                             rd          => "00000",
+                                             imm         => (others => '0'),
+                                             opcode      => (others => 'X'),
+                                             rs1_rd      => '0',
+                                             rs2_rd      => '0',
+                                             use_imm     => '0',
+                                             rf_we       => '0');
 
     -- Constants
     constant c_op_load     : std_logic_vector(6 downto 0) := "0000011";
@@ -90,6 +90,9 @@ package body id_pkg is
             writeline(output, l);
         elsif insn_type = OP_ALU then
             write(l, string'("ALU"));
+            writeline(output, l);
+        elsif insn_type = OP_STALL then
+            write(l, string'("STALL"));
             writeline(output, l);
         else
             write(l, string'("ILLEGAL"));

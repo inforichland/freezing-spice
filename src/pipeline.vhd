@@ -5,7 +5,7 @@
 -- File       : pipeline.vhd
 -- Author     :   Tim Wawrzynczak
 -- Created    : 2015-07-07
--- Last update: 2015-07-28
+-- Last update: 2015-11-30
 -- Platform   : FPGA
 -- Standard   : VHDL'93/02
 -------------------------------------------------------------------------------
@@ -66,10 +66,12 @@ architecture Behavioral of pipeline is
     -------------------------------------------------
     -- ID signals
     -------------------------------------------------
-    signal id_d     : id_in;
-    signal id_q     : id_out;
+    signal id_d     : word;
+    signal id_q     : decoded_t;
     signal rs1_data : word;
     signal rs2_data : word;
+    signal id_op1   : word;
+    signal id_op2   : word;
 
     -------------------------------------------------
     -- ID/EX pipeline registers
@@ -81,7 +83,7 @@ architecture Behavioral of pipeline is
     signal id_ex_op2         : word                         := (others => '0');
     signal id_ex_ir          : word                         := NOP;
     signal id_ex_imm         : word                         := (others => '0');
-    signal id_ex_insn_type   : insn_type_t                  := OP_ILLEGAL;
+    signal id_ex_insn_type   : insn_type_t                  := OP_STALL;
     signal id_ex_use_imm     : std_logic                    := '0';
     signal id_ex_alu_func    : alu_func_t                   := ALU_NONE;
     signal id_ex_branch_type : branch_type_t                := BRANCH_NONE;
@@ -109,10 +111,12 @@ architecture Behavioral of pipeline is
     signal ex_mem_load_type   : load_type_t                  := LOAD_NONE;
     signal ex_mem_store_type  : store_type_t                 := STORE_NONE;
     signal ex_mem_rd_addr     : std_logic_vector(4 downto 0) := (others => '0');
-    signal ex_mem_insn_type   : insn_type_t                  := OP_ILLEGAL;
+    signal ex_mem_insn_type   : insn_type_t                  := OP_STALL;
     signal ex_mem_rf_we       : std_logic                    := '0';
     signal ex_mem_data_addr   : word                         := (others => '0');
     signal ex_mem_data_out    : word                         := (others => '0');
+    signal ex_mem_rs1_addr    : std_logic_vector(4 downto 0) := (others => '0');
+    signal ex_mem_rs2_addr    : std_logic_vector(4 downto 0) := (others => '0');
 
     -------------------------------------------------
     -- MEM signals
@@ -131,7 +135,7 @@ architecture Behavioral of pipeline is
     signal mem_wb_rd_addr   : std_logic_vector(4 downto 0) := (others => '0');
     signal mem_wb_rf_we     : std_logic                    := '0';
     signal mem_wb_rf_data   : word                         := (others => '0');
-    signal mem_wb_insn_type : insn_type_t                  := OP_ILLEGAL;
+    signal mem_wb_insn_type : insn_type_t                  := OP_STALL;
     signal mem_wb_lmd       : word                         := (others => '0');
 
     -------------------------------------------------
@@ -145,7 +149,7 @@ architecture Behavioral of pipeline is
     -- Stalling
     -------------------------------------------------
     signal branch_stall : std_logic;
-    signal hazard_stall : std_logic;
+    signal load_stall : std_logic;
     signal if_kill      : std_logic;
     signal id_kill      : std_logic;
     signal id_stall     : std_logic;
@@ -171,28 +175,22 @@ begin  -- architecture Behavioral
     -------------------------------------------------
     branch_stall <= '1' when (id_ex_insn_type = OP_JAL or id_ex_insn_type = OP_JALR or
                               (id_ex_insn_type = OP_BRANCH and ex_q.compare_result = '1')) else '0';
-    id_stall   <= hazard_stall or branch_stall;
+    id_stall   <= load_stall or branch_stall;
     if_kill    <= ex_mem_load_pc or (not insn_valid);
     id_kill    <= ex_mem_load_pc;
     full_stall <= '1' when (ex_mem_insn_type = OP_LOAD and data_in_valid = '0') else '0';
 
-    -- Determine when to stall the pipeline because of structural hazards
-    hazard_stall <= '1' when (((id_ex_rd_addr = id_q.rs1) and (id_q.rs1 /= "00000") and (id_ex_rf_we = '1') and (id_q.rs1_rd = '1'))
-                              or ((ex_mem_rd_addr = id_q.rs1) and (id_q.rs1 /= "00000") and (ex_mem_rf_we = '1') and (id_q.rs1_rd = '1'))
-                              or ((mem_wb_rd_addr = id_q.rs1) and (id_q.rs1 /= "00000") and (mem_wb_rf_we = '1') and (id_q.rs1_rd = '1'))
-                              or ((id_ex_rd_addr = id_q.rs2) and (id_q.rs2 /= "00000") and (id_ex_rf_we = '1') and (id_q.rs2_rd = '1'))
-                              or ((ex_mem_rd_addr = id_q.rs2) and (id_q.rs2 /= "00000") and (ex_mem_rf_we = '1') and (id_q.rs2_rd = '1'))
-                              or ((mem_wb_rd_addr = id_q.rs2) and (id_q.rs2 /= "00000") and (mem_wb_rf_we = '1') and (id_q.rs2_rd = '1'))
-                              or ((ex_mem_insn_type = OP_LOAD) and (id_ex_rd_addr = id_q.rs1) and (id_ex_rd_addr /= "00000") and (id_q.rs1_rd = '1'))
-                              or ((ex_mem_insn_type = OP_LOAD) and (id_ex_rd_addr = id_q.rs2) and (id_ex_rd_addr /= "00000") and (id_q.rs2_rd = '1')))
-                    else '0';
+    -- Determine when to stall the pipeline because of an instruction using the result of a load
+    load_stall <= '1' when (((ex_mem_insn_type = OP_LOAD) and (id_ex_rd_addr = id_q.rs1) and (id_ex_rd_addr /= "00000") and (id_q.rs1_rd = '1')) or
+                            ((ex_mem_insn_type = OP_LOAD) and (id_ex_rd_addr = id_q.rs2) and (id_ex_rd_addr /= "00000") and (id_q.rs2_rd = '1')))
+                  else '0';
 
     ---------------------------------------------------
     -- Instruction fetch
     ---------------------------------------------------
 
     -- inputs
-    if_d.stall   <= ex_mem_load_pc or hazard_stall or branch_stall;
+    if_d.stall   <= ex_mem_load_pc or load_stall or branch_stall;
     if_d.load_pc <= ex_mem_load_pc;
     if_d.next_pc <= ex_mem_next_pc;
 
@@ -237,12 +235,21 @@ begin  -- architecture Behavioral
                   dataw => wb_rf_wr_data,
                   we    => wb_rf_wr_en);
 
-    -- inputs
-    id_d.instruction <= if_id_ir;
-
-    -- instantiation
+    -- instantiation of decoder
     id_stage : entity work.instruction_decoder(Behavioral)
-        port map (id_d, id_q);
+        port map (if_id_ir, id_q);
+
+    -- forwarding to ALU input multiplexer
+    id_op1 <= ex_q.alu_result when (id_q.rs1 = id_ex_rd_addr) else
+              ex_mem_rf_data when (id_q.rs1 = ex_mem_rd_addr) else
+              mem_wb_rf_data when (id_q.rs1 = mem_wb_rd_addr) else
+              rs1_data;
+
+    -- forwarding to ALU input multiplexer
+    id_op2 <= ex_q.alu_result when (id_q.rs2 = id_ex_rd_addr) else
+              ex_mem_rf_data when (id_q.rs2 = ex_mem_rd_addr) else
+              mem_wb_rf_data when (id_q.rs2 = mem_wb_rd_addr) else
+              rs2_data;
 
     ---------------------------------------------------
     -- ID/EX pipeline registers
@@ -252,25 +259,26 @@ begin  -- architecture Behavioral
     --   controlled by id_stall, full_stall, and id_kill
     id_ex_reg_proc : process (clk, rst_n) is
     begin  -- process id_ex_reg_proc
-        if (rst_n = '0') then           -- asynchronous reset (active low)
-            id_ex_pc       <= (others => '0');
-            id_ex_rs1_addr <= (others => '0');
-            id_ex_rs2_addr <= (others => '0');
-            id_ex_op1      <= (others => '0');
-            id_ex_op2      <= (others => '0');
-            id_ex_ir       <= NOP;
+        if (rst_n = '0') then              -- asynchronous reset (active low)
+            id_ex_pc        <= (others => '0');
+            id_ex_rs1_addr  <= (others => '0');
+            id_ex_rs2_addr  <= (others => '0');
+            id_ex_op1       <= (others => '0');
+            id_ex_op2       <= (others => '0');
+            id_ex_ir        <= (others => '0');
+            id_ex_insn_type <= OP_ILLEGAL;
         elsif (rising_edge(clk)) then
             if (id_stall = '0' and full_stall = '0') then
                 id_ex_rs1_addr <= id_q.rs1;
                 id_ex_rs2_addr <= id_q.rs2;
-                id_ex_op1      <= rs1_data;
-                id_ex_op2      <= rs2_data;
+                id_ex_op1      <= id_op1;  --rs1_data;
+                id_ex_op2      <= id_op2;  --rs2_data;
                 id_ex_use_imm  <= id_q.use_imm;
 
                 if (id_kill = '1') then
                     id_ex_ir          <= NOP;
                     id_ex_rd_addr     <= (others => '0');
-                    id_ex_insn_type   <= OP_ILLEGAL;
+                    id_ex_insn_type   <= OP_STALL;
                     id_ex_rf_we       <= '0';
                     id_ex_use_imm     <= '0';
                     id_ex_imm         <= (others => '0');
@@ -295,7 +303,7 @@ begin  -- architecture Behavioral
             elsif (id_stall = '1' and full_stall = '0') then
                 id_ex_ir          <= NOP;
                 id_ex_rd_addr     <= (others => '0');
-                id_ex_insn_type   <= OP_ILLEGAL;
+                id_ex_insn_type   <= OP_STALL;
                 id_ex_rf_we       <= '0';
                 id_ex_use_imm     <= '0';
                 id_ex_imm         <= (others => '0');
@@ -311,12 +319,15 @@ begin  -- architecture Behavioral
     -- print instructions as they are issued
     ---------------------------------------------------
     print_decode : if (g_for_sim = true) generate
-        print_decode_proc : process (id_ex_ir, id_ex_pc) is
+        print_decode_proc : process (id_ex_ir, id_ex_pc, id_ex_insn_type) is
             variable l : line;
         begin  -- process print_decode_proc
             write(l, to_integer(unsigned(id_ex_pc)));
             write(l, string'("  : "));
             write(l, hstr(id_ex_ir));
+            writeline(output, l);
+            print_insn(id_ex_insn_type);
+            print(id_ex_insn_type);
             writeline(output, l);
         end process print_decode_proc;
     end generate print_decode;
@@ -343,7 +354,7 @@ begin  -- architecture Behavioral
     ex_rf_data <= ex_q.return_addr when (id_ex_insn_type = OP_JAL or id_ex_insn_type = OP_JALR) else
                   id_ex_imm when (id_ex_insn_type = OP_LUI) else
                   ex_q.alu_result;
-    
+
     -- selecter for loading the PC with a new value
     ex_load_pc <= '1' when (id_ex_insn_type = OP_JAL or id_ex_insn_type = OP_JALR or
                             (id_ex_insn_type = OP_BRANCH and ex_q.compare_result = '1')) else '0';
@@ -358,7 +369,7 @@ begin  -- architecture Behavioral
     -- purpose: Pipeline data between EX and MEM stages
     ex_mem_regs_proc : process (clk, rst_n) is
     begin  -- process ex_mem_regs_proc
-        if (rst_n = '0') then           -- asynchronous reset (active low)
+        if (rst_n = '0') then                         -- asynchronous reset (active low)
             ex_mem_load_pc     <= '0';
             ex_mem_next_pc     <= (others => '0');
             ex_mem_rf_data     <= (others => '0');
@@ -366,7 +377,7 @@ begin  -- architecture Behavioral
             ex_mem_load_type   <= LOAD_NONE;
             ex_mem_store_type  <= STORE_NONE;
             ex_mem_rd_addr     <= (others => '0');
-            ex_mem_insn_type   <= OP_ILLEGAL;
+            ex_mem_insn_type   <= OP_STALL;
             ex_mem_rf_we       <= '0';
         elsif (rising_edge(clk)) then
             if (full_stall = '0') then
@@ -380,6 +391,8 @@ begin  -- architecture Behavioral
                 ex_mem_rd_addr    <= id_ex_rd_addr;
                 ex_mem_insn_type  <= id_ex_insn_type;
                 ex_mem_rf_we      <= id_ex_rf_we;
+                ex_mem_rs1_addr   <= id_ex_rs1_addr;  -- only needed for forwarding
+                ex_mem_rs2_addr   <= id_ex_rs2_addr;  -- only needed for forwarding
             end if;
         end if;
     end process ex_mem_regs_proc;
@@ -427,7 +440,7 @@ begin  -- architecture Behavioral
             mem_wb_rd_addr   <= (others => '0');
             mem_wb_rf_we     <= '0';
             mem_wb_rf_data   <= (others => '0');
-            mem_wb_insn_type <= OP_ILLEGAL;
+            mem_wb_insn_type <= OP_STALL;
         elsif (rising_edge(clk)) then
             if (full_stall = '0') then
                 mem_wb_rd_addr   <= ex_mem_rd_addr;

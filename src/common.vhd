@@ -7,8 +7,6 @@ package common is
     -- definition for a machine word
     subtype word is std_logic_vector(31 downto 0);
 
-    subtype imm_type_t is std_logic_vector(2 downto 0);
-
     subtype alu_func_t is std_logic_vector(3 downto 0);
     constant ALU_NONE : alu_func_t := "0000";
     constant ALU_ADD  : alu_func_t := "0001";
@@ -34,6 +32,7 @@ package common is
     constant OP_LOAD    : insn_type_t := "0110";
     constant OP_STORE   : insn_type_t := "0111";
     constant OP_ALU     : insn_type_t := "1000";
+    constant OP_STALL   : insn_type_t := "1001";
 
     subtype branch_type_t is std_logic_vector(2 downto 0);
     constant BRANCH_NONE : branch_type_t := "000";

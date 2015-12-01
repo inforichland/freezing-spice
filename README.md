@@ -31,7 +31,6 @@ TODO
 ----
 + Better tests!
 + CSRs (Core Specific Registers)
-+ Forwarding between pipeline stages to reduce structural hazards
 + Interrupts / Exceptions
 + Branch prediction
 + Caches
