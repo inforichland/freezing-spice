@@ -55,8 +55,6 @@ architecture testbench of pipeline_tb is
                              68     => encode_r_type(R_ADD, 8, 9, 10),                     -- ADD x8, x9, x10
                              -- loop back to the previous address
                              72     => encode_sb_type(SB_BNE, "111111111110", 9, 8),       -- BNE x9, x8, -4
-
---                             72     => encode_uj_type(UJ_JAL, "00000000000000000000", 7),  -- JAL x7, 0
                              76     => encode_i_type(I_ADDI, "000000000001", 0, 1),  -- ADDI x0, x1, 1     -- this should not get executed
                              80     => encode_i_type(I_ADDI, "000000000011", 0, 1),  -- ADDI x0, x1, 3     -- this should not get executed
                              84     => encode_i_type(I_ADDI, "000000000111", 0, 1),  -- ADDI x0, x1, 3     -- this should not get executed

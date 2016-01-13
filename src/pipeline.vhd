@@ -5,7 +5,7 @@
 -- File       : pipeline.vhd
 -- Author     :   Tim Wawrzynczak
 -- Created    : 2015-07-07
--- Last update: 2015-12-01
+-- Last update: 2016-01-13
 -- Platform   : FPGA
 -- Standard   : VHDL'93/02
 -------------------------------------------------------------------------------
@@ -149,7 +149,7 @@ architecture Behavioral of pipeline is
     -- Stalling
     -------------------------------------------------
     signal branch_stall : std_logic;
-    signal load_stall : std_logic;
+--    signal load_stall   : std_logic;
     signal if_kill      : std_logic;
     signal id_kill      : std_logic;
     signal id_stall     : std_logic;
@@ -175,22 +175,17 @@ begin  -- architecture Behavioral
     -------------------------------------------------
     branch_stall <= '1' when (id_ex_insn_type = OP_JAL or id_ex_insn_type = OP_JALR or
                               (id_ex_insn_type = OP_BRANCH and ex_q.compare_result = '1')) else '0';
-    id_stall   <= load_stall or branch_stall;
-    if_kill    <= ex_mem_load_pc or (not insn_valid) or load_stall;
-    id_kill    <= ex_mem_load_pc or load_stall;
+    id_stall   <= branch_stall;
+    if_kill    <= ex_mem_load_pc or (not insn_valid);
+    id_kill    <= ex_mem_load_pc;
     full_stall <= '1' when (ex_mem_insn_type = OP_LOAD and data_in_valid = '0') else '0';
-
-    -- Determine when to stall the pipeline because of an instruction using the result of a load
-    load_stall <= '1' when (((ex_mem_insn_type = OP_LOAD) and (ex_mem_rd_addr = id_q.rs1) and (id_ex_rd_addr /= "00000") and (id_q.rs1_rd = '1')) or
-                            ((ex_mem_insn_type = OP_LOAD) and (ex_mem_rd_addr = id_q.rs2) and (id_ex_rd_addr /= "00000") and (id_q.rs2_rd = '1')))
-                  else '0';
 
     ---------------------------------------------------
     -- Instruction fetch
     ---------------------------------------------------
 
     -- inputs
-    if_d.stall   <= ex_mem_load_pc or load_stall or branch_stall;
+    if_d.stall   <= ex_mem_load_pc or branch_stall;
     if_d.load_pc <= ex_mem_load_pc;
     if_d.next_pc <= ex_mem_next_pc;
 
@@ -259,7 +254,7 @@ begin  -- architecture Behavioral
     --   controlled by id_stall, full_stall, and id_kill
     id_ex_reg_proc : process (clk, rst_n) is
     begin  -- process id_ex_reg_proc
-        if (rst_n = '0') then              -- asynchronous reset (active low)
+        if (rst_n = '0') then           -- asynchronous reset (active low)
             id_ex_pc        <= (others => '0');
             id_ex_rs1_addr  <= (others => '0');
             id_ex_rs2_addr  <= (others => '0');
@@ -335,7 +330,7 @@ begin  -- architecture Behavioral
     ---------------------------------------------------
     -- Instruction execution stage
     ---------------------------------------------------
-    
+
     -- inputs (includes multiplexers for operand inputs from the LMD "Load Memory Data" register)
     ex_d.insn_type   <= id_ex_insn_type;
     ex_d.npc         <= id_ex_pc;
@@ -369,7 +364,7 @@ begin  -- architecture Behavioral
     -- purpose: Pipeline data between EX and MEM stages
     ex_mem_regs_proc : process (clk, rst_n) is
     begin  -- process ex_mem_regs_proc
-        if (rst_n = '0') then                         -- asynchronous reset (active low)
+        if (rst_n = '0') then           -- asynchronous reset (active low)
             ex_mem_load_pc     <= '0';
             ex_mem_next_pc     <= (others => '0');
             ex_mem_rf_data     <= (others => '0');
