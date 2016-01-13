@@ -15,7 +15,7 @@ Microarchitecture
   + Register file writeback
 + In-order, single-issue (see TODOs)
 + 3-cycle branch penalty (see TODOs)
-+ All hazard stalls are resolved via interlocking (see TODOs)
++ Most structural hazards that could be overcome w/ muxing are implemented as such ("bypassing")
 
 Status
 ------
