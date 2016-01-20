@@ -5,7 +5,7 @@
 -- File       : pipeline.vhd
 -- Author     :   Tim Wawrzynczak
 -- Created    : 2015-07-07
--- Last update: 2016-01-19
+-- Last update: 2016-01-20
 -- Platform   : FPGA
 -- Standard   : VHDL'93/02
 -------------------------------------------------------------------------------
@@ -153,7 +153,6 @@ architecture Behavioral of pipeline is
     -- Stalling
     -------------------------------------------------
     signal branch_stall : std_logic;
-    signal load_stall   : std_logic;
     signal if_kill      : std_logic;
     signal id_kill      : std_logic;
     signal id_stall     : std_logic;
@@ -175,26 +174,21 @@ begin  -- architecture Behavioral
     data_out      <= mem_data_out;
 
     -------------------------------------------------
-    -- Detect when stalling is necessary
+    -- Detect when stalling / killing is necessary
     -------------------------------------------------
     branch_stall <= '1' when (id_ex_insn_type = OP_JAL or id_ex_insn_type = OP_JALR or
                               (id_ex_insn_type = OP_BRANCH and ex_q.compare_result = '1')) else '0';
-    id_stall   <= load_stall or branch_stall;
-    if_kill    <= ex_mem_load_pc or (not insn_valid) or load_stall or id_predict_taken or ex_branch_mispredict;
-    id_kill    <= ex_mem_load_pc or load_stall or id_predict_taken or ex_branch_mispredict;
+    id_stall   <= branch_stall;
+    if_kill    <= ex_mem_load_pc or (not insn_valid) or id_predict_taken or ex_branch_mispredict;
+    id_kill    <= ex_mem_load_pc or id_predict_taken or ex_branch_mispredict;
     full_stall <= '1' when (ex_mem_insn_type = OP_LOAD and data_in_valid = '0') else '0';
-
-    -- Determine when to stall the pipeline because of an instruction using the result of a load
-    load_stall <= '1' when (((ex_mem_insn_type = OP_LOAD) and (ex_mem_rd_addr = id_q.rs1) and (id_ex_rd_addr /= "00000") and (id_q.rs1_rd = '1')) or
-                            ((ex_mem_insn_type = OP_LOAD) and (ex_mem_rd_addr = id_q.rs2) and (id_ex_rd_addr /= "00000") and (id_q.rs2_rd = '1')))
-                  else '0';
 
     ---------------------------------------------------
     -- Instruction fetch
     ---------------------------------------------------
 
     -- inputs
-    if_d.stall   <= ex_mem_load_pc or load_stall or branch_stall;  -- or id_predict_taken;
+    if_d.stall   <= ex_mem_load_pc or branch_stall;  -- or id_predict_taken;
     if_d.load_pc <= ex_mem_load_pc or id_predict_taken;
     if_d.next_pc <= ex_mem_next_pc when (ex_mem_load_pc = '1') else id_branch_pc;
 
@@ -377,7 +371,6 @@ begin  -- architecture Behavioral
 
     -- check for misprediction.
     ex_branch_mispredict <= '1' when (id_ex_insn_type = OP_BRANCH and ex_q.compare_result = '0' and id_ex_taken = '1') else '0';
-
 
     -- multiplexer for data memory address
     ex_data_addr <= ex_q.alu_result when (id_ex_insn_type = OP_LOAD or id_ex_insn_type = OP_STORE) else ex_mem_data_addr;
