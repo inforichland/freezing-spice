@@ -5,7 +5,7 @@
 -- File       : pipeline.vhd
 -- Author     :   Tim Wawrzynczak
 -- Created    : 2015-07-07
--- Last update: 2015-12-01
+-- Last update: 2016-01-19
 -- Platform   : FPGA
 -- Standard   : VHDL'93/02
 -------------------------------------------------------------------------------
@@ -66,12 +66,14 @@ architecture Behavioral of pipeline is
     -------------------------------------------------
     -- ID signals
     -------------------------------------------------
-    signal id_d     : word;
-    signal id_q     : decoded_t;
-    signal rs1_data : word;
-    signal rs2_data : word;
-    signal id_op1   : word;
-    signal id_op2   : word;
+    signal id_d             : word;
+    signal id_q             : decoded_t;
+    signal rs1_data         : word;
+    signal rs2_data         : word;
+    signal id_op1           : word;
+    signal id_op2           : word;
+    signal id_predict_taken : std_logic;
+    signal id_branch_pc     : word;
 
     -------------------------------------------------
     -- ID/EX pipeline registers
@@ -91,15 +93,17 @@ architecture Behavioral of pipeline is
     signal id_ex_load_type   : load_type_t                  := LOAD_NONE;
     signal id_ex_store_type  : store_type_t                 := STORE_NONE;
     signal id_ex_rf_we       : std_logic                    := '0';
+    signal id_ex_taken       : std_logic                    := '0';
 
     -------------------------------------------------
     -- EX signals
     -------------------------------------------------
-    signal ex_d         : ex_in;
-    signal ex_q         : ex_out;
-    signal ex_rf_data   : word;
-    signal ex_load_pc   : std_logic;
-    signal ex_data_addr : word;
+    signal ex_d                 : ex_in;
+    signal ex_q                 : ex_out;
+    signal ex_rf_data           : word;
+    signal ex_load_pc           : std_logic;
+    signal ex_data_addr         : word;
+    signal ex_branch_mispredict : std_logic;
 
     -------------------------------------------------
     -- EX/MEM pipeline registers
@@ -149,7 +153,7 @@ architecture Behavioral of pipeline is
     -- Stalling
     -------------------------------------------------
     signal branch_stall : std_logic;
-    signal load_stall : std_logic;
+    signal load_stall   : std_logic;
     signal if_kill      : std_logic;
     signal id_kill      : std_logic;
     signal id_stall     : std_logic;
@@ -176,8 +180,8 @@ begin  -- architecture Behavioral
     branch_stall <= '1' when (id_ex_insn_type = OP_JAL or id_ex_insn_type = OP_JALR or
                               (id_ex_insn_type = OP_BRANCH and ex_q.compare_result = '1')) else '0';
     id_stall   <= load_stall or branch_stall;
-    if_kill    <= ex_mem_load_pc or (not insn_valid) or load_stall;
-    id_kill    <= ex_mem_load_pc or load_stall;
+    if_kill    <= ex_mem_load_pc or (not insn_valid) or load_stall or id_predict_taken or ex_branch_mispredict;
+    id_kill    <= ex_mem_load_pc or load_stall or id_predict_taken or ex_branch_mispredict;
     full_stall <= '1' when (ex_mem_insn_type = OP_LOAD and data_in_valid = '0') else '0';
 
     -- Determine when to stall the pipeline because of an instruction using the result of a load
@@ -190,9 +194,9 @@ begin  -- architecture Behavioral
     ---------------------------------------------------
 
     -- inputs
-    if_d.stall   <= ex_mem_load_pc or load_stall or branch_stall;
-    if_d.load_pc <= ex_mem_load_pc;
-    if_d.next_pc <= ex_mem_next_pc;
+    if_d.stall   <= ex_mem_load_pc or load_stall or branch_stall;  -- or id_predict_taken;
+    if_d.load_pc <= ex_mem_load_pc or id_predict_taken;
+    if_d.next_pc <= ex_mem_next_pc when (ex_mem_load_pc = '1') else id_branch_pc;
 
     -- instantiation
     if_stage : entity work.instruction_fetch(Behavioral)
@@ -251,6 +255,14 @@ begin  -- architecture Behavioral
               mem_wb_rf_data when (id_q.rs2 = mem_wb_rd_addr) else
               rs2_data;
 
+    -- branch prediction: for now, predict backward branches as TAKEN
+    --   and forward as NOT TAKEN
+    id_predict_taken <= '1' when (id_q.imm(31) = '1' and (id_q.insn_type = OP_BRANCH or id_q.insn_type = OP_JAL or id_q.insn_type = OP_JALR))
+                        else '0';
+
+    -- adder for branch prediction
+    id_branch_pc <= word(unsigned(if_id_pc) + unsigned(id_q.imm));
+
     ---------------------------------------------------
     -- ID/EX pipeline registers
     ---------------------------------------------------
@@ -259,7 +271,7 @@ begin  -- architecture Behavioral
     --   controlled by id_stall, full_stall, and id_kill
     id_ex_reg_proc : process (clk, rst_n) is
     begin  -- process id_ex_reg_proc
-        if (rst_n = '0') then              -- asynchronous reset (active low)
+        if (rst_n = '0') then           -- asynchronous reset (active low)
             id_ex_pc        <= (others => '0');
             id_ex_rs1_addr  <= (others => '0');
             id_ex_rs2_addr  <= (others => '0');
@@ -286,6 +298,7 @@ begin  -- architecture Behavioral
                     id_ex_branch_type <= BRANCH_NONE;
                     id_ex_load_type   <= LOAD_NONE;
                     id_ex_store_type  <= STORE_NONE;
+                    id_ex_taken       <= '0';
                 else
                     -- instruction issue
                     id_ex_pc          <= if_id_pc;
@@ -299,6 +312,7 @@ begin  -- architecture Behavioral
                     id_ex_branch_type <= id_q.branch_type;
                     id_ex_load_type   <= id_q.load_type;
                     id_ex_store_type  <= id_q.store_type;
+                    id_ex_taken       <= id_predict_taken;
                 end if;
             elsif (id_stall = '1' and full_stall = '0') then
                 id_ex_ir          <= NOP;
@@ -311,6 +325,7 @@ begin  -- architecture Behavioral
                 id_ex_branch_type <= BRANCH_NONE;
                 id_ex_load_type   <= LOAD_NONE;
                 id_ex_store_type  <= STORE_NONE;
+                id_ex_taken       <= '0';
             end if;
         end if;
     end process id_ex_reg_proc;
@@ -335,8 +350,9 @@ begin  -- architecture Behavioral
     ---------------------------------------------------
     -- Instruction execution stage
     ---------------------------------------------------
-    
-    -- inputs (includes multiplexers for operand inputs from the LMD "Load Memory Data" register)
+
+    -- inputs (includes multiplexers for ALU operands from the LMD "Load Memory
+    -- Data" datapath)
     ex_d.insn_type   <= id_ex_insn_type;
     ex_d.npc         <= id_ex_pc;
     ex_d.rs1         <= mem_lmd when (id_ex_rs1_addr = ex_mem_rd_addr and ex_mem_insn_type = OP_LOAD) else id_ex_op1;
@@ -356,8 +372,12 @@ begin  -- architecture Behavioral
                   ex_q.alu_result;
 
     -- selecter for loading the PC with a new value
-    ex_load_pc <= '1' when (id_ex_insn_type = OP_JAL or id_ex_insn_type = OP_JALR or
-                            (id_ex_insn_type = OP_BRANCH and ex_q.compare_result = '1')) else '0';
+    ex_load_pc <= '1' when (id_ex_taken = '0' and (id_ex_insn_type = OP_JAL or id_ex_insn_type = OP_JALR or
+                                                   (id_ex_insn_type = OP_BRANCH and ex_q.compare_result = '1'))) else '0';
+
+    -- check for misprediction.
+    ex_branch_mispredict <= '1' when (id_ex_insn_type = OP_BRANCH and ex_q.compare_result = '0' and id_ex_taken = '1') else '0';
+
 
     -- multiplexer for data memory address
     ex_data_addr <= ex_q.alu_result when (id_ex_insn_type = OP_LOAD or id_ex_insn_type = OP_STORE) else ex_mem_data_addr;
@@ -369,7 +389,7 @@ begin  -- architecture Behavioral
     -- purpose: Pipeline data between EX and MEM stages
     ex_mem_regs_proc : process (clk, rst_n) is
     begin  -- process ex_mem_regs_proc
-        if (rst_n = '0') then                         -- asynchronous reset (active low)
+        if (rst_n = '0') then           -- asynchronous reset (active low)
             ex_mem_load_pc     <= '0';
             ex_mem_next_pc     <= (others => '0');
             ex_mem_rf_data     <= (others => '0');
