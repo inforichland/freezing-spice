@@ -14,8 +14,8 @@ Microarchitecture
   + Memory access
   + Register file writeback
 + In-order, single-issue (see TODOs)
-+ 3-cycle branch penalty (see TODOs)
-+ Most structural hazards that could be overcome w/ muxing are implemented as such ("bypassing")
++ 1-cycle branch penalty for correctly predicted branches, 3 otherwise
++ Most structural hazards that could be overcome w/ muxing are implemented as such ("bypassing" or "forwarding")
 
 Status
 ------
@@ -32,7 +32,7 @@ TODO
 + Better tests!
 + CSRs (Core Specific Registers)
 + Interrupts / Exceptions
-+ Branch prediction
++ More sophisticated Branch prediction
 + Caches
 + Out-of-order (maybe?)
 + Multiple-issue (maybe?)
