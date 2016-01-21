@@ -5,7 +5,7 @@
 -- File       : pipeline.vhd
 -- Author     :   Tim Wawrzynczak
 -- Created    : 2015-07-07
--- Last update: 2016-01-20
+-- Last update: 2016-01-21
 -- Platform   : FPGA
 -- Standard   : VHDL'93/02
 -------------------------------------------------------------------------------
@@ -131,6 +131,8 @@ architecture Behavioral of pipeline is
     signal mem_data_out  : word;
     signal mem_lmd_lh    : word;
     signal mem_lmd_lb    : word;
+    signal mem_lmd_lhu   : word;
+    signal mem_lmd_lbu   : word;
     signal mem_lmd       : word;
 
     -------------------------------------------------
@@ -274,6 +276,8 @@ begin  -- architecture Behavioral
             id_ex_ir        <= (others => '0');
             id_ex_insn_type <= OP_ILLEGAL;
         elsif (rising_edge(clk)) then
+            id_ex_taken <= id_predict_taken;
+
             if (id_stall = '0' and full_stall = '0') then
                 id_ex_rs1_addr <= id_q.rs1;
                 id_ex_rs2_addr <= id_q.rs2;
@@ -292,7 +296,6 @@ begin  -- architecture Behavioral
                     id_ex_branch_type <= BRANCH_NONE;
                     id_ex_load_type   <= LOAD_NONE;
                     id_ex_store_type  <= STORE_NONE;
-                    id_ex_taken       <= '0';
                 else
                     -- instruction issue
                     id_ex_pc          <= if_id_pc;
@@ -306,7 +309,6 @@ begin  -- architecture Behavioral
                     id_ex_branch_type <= id_q.branch_type;
                     id_ex_load_type   <= id_q.load_type;
                     id_ex_store_type  <= id_q.store_type;
-                    id_ex_taken       <= id_predict_taken;
                 end if;
             elsif (id_stall = '1' and full_stall = '0') then
                 id_ex_ir          <= NOP;
@@ -319,7 +321,6 @@ begin  -- architecture Behavioral
                 id_ex_branch_type <= BRANCH_NONE;
                 id_ex_load_type   <= LOAD_NONE;
                 id_ex_store_type  <= STORE_NONE;
-                id_ex_taken       <= '0';
             end if;
         end if;
     end process id_ex_reg_proc;
@@ -328,7 +329,7 @@ begin  -- architecture Behavioral
     -- print instructions as they are issued
     ---------------------------------------------------
     print_decode : if (g_for_sim = true) generate
-        print_decode_proc : process (id_ex_ir, id_ex_pc, id_ex_insn_type) is
+        print_decode_proc : process (id_ex_ir, id_ex_pc, id_ex_insn_type, id_ex_taken) is
             variable l : line;
         begin  -- process print_decode_proc
             write(l, to_integer(unsigned(id_ex_pc)));
@@ -337,6 +338,13 @@ begin  -- architecture Behavioral
             writeline(output, l);
             print_insn(id_ex_insn_type);
             print(id_ex_insn_type);
+
+            if id_ex_taken = '1' then
+                write(l, string'("Predicting branch as taken, redirecting PC to "));
+                writeline(output, l);
+                print(id_branch_pc);
+            end if;
+
             writeline(output, l);
         end process print_decode_proc;
     end generate print_decode;
@@ -424,23 +432,26 @@ begin  -- architecture Behavioral
                      X"000000" & ex_mem_data_out(7 downto 0) when ex_mem_store_type = SB else
                      ex_mem_data_out;
 
-    -- if the load is a signed halfword
-    mem_lmd_lh <= data_in(15) & data_in(15) & data_in(15) & data_in(15) & data_in(15) & data_in(15) & data_in(15) & data_in(15) &
-                  data_in(15) & data_in(15) & data_in(15) & data_in(15) & data_in(15) & data_in(15) & data_in(15) & data_in(15) & data_in(15 downto 0);
+    -- load halfword (signed)
+    mem_lmd_lh <= word(resize(signed(data_in(15 downto 0)), word'high + 1));
 
-    -- if the load is a signed byte
-    mem_lmd_lb <= data_in(7) & data_in(7) & data_in(7) & data_in(7) & data_in(7) & data_in(7) & data_in(7) & data_in(7) &
-                  data_in(7) & data_in(7) & data_in(7) & data_in(7) & data_in(7) & data_in(7) & data_in(7) & data_in(7) &
-                  data_in(7) & data_in(7) & data_in(7) & data_in(7) & data_in(7) & data_in(7) & data_in(7) & data_in(7) & data_in(7 downto 0);
+    -- load byte (signed)
+    mem_lmd_lb <= word(resize(signed(data_in(7 downto 0)), word'high + 1));
+
+    -- load halfword unsigned
+    mem_lmd_lhu <= word(resize(unsigned(data_in(15 downto 0)), word'high + 1));
+
+    -- load byte unsigned
+    mem_lmd_lbu <= word(resize(unsigned(data_in(7 downto 0)), word'high + 1));
 
     -- Load Memory Data register input
     with ex_mem_load_type select
         mem_lmd <=
-        X"0000" & data_in(15 downto 0)  when LHU,
-        X"000000" & data_in(7 downto 0) when LBU,
-        mem_lmd_lh                      when LH,
-        mem_lmd_lb                      when LB,
-        data_in                         when others;
+        mem_lmd_lhu when LHU,
+        mem_lmd_lbu when LBU,
+        mem_lmd_lh  when LH,
+        mem_lmd_lb  when LB,
+        data_in     when others;
 
     ---------------------------------------------------
     -- MEM/WB pipeline registers
