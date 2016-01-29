@@ -17,7 +17,7 @@ all: $(TESTS)
 $(TESTS):
 	$(GHDL) -a $(GHDLFLAGS) 	$(SRC) $(TESTS_PATH)/$@.vhd
 	$(GHDL) -e $(GHDLFLAGS) 	$@
-	$(GHDL) -r $(GHDLRUNFLAGS) 	$@ --vcd=$@.vcd
+	$(GHDL) -r $(GHDLRUNFLAGS) 	$@ --vcd=$@.vcd  #--wave=$@.ghw
 .PHONY: $(TESTS)
 
 .PHONY: clean

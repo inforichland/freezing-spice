@@ -5,7 +5,7 @@
 -- File       : pipeline.vhd
 -- Author     :   Tim Wawrzynczak
 -- Created    : 2015-07-07
--- Last update: 2016-01-21
+-- Last update: 2016-01-28
 -- Platform   : FPGA
 -- Standard   : VHDL'93/02
 -------------------------------------------------------------------------------
@@ -240,15 +240,15 @@ begin  -- architecture Behavioral
         port map (if_id_ir, id_q);
 
     -- forwarding to ALU input multiplexer
-    id_op1 <= ex_q.alu_result when (id_q.rs1 = id_ex_rd_addr) else
-              ex_mem_rf_data when (id_q.rs1 = ex_mem_rd_addr) else
-              mem_wb_rf_data when (id_q.rs1 = mem_wb_rd_addr) else
+    id_op1 <= ex_q.alu_result when (id_q.rs1 = id_ex_rd_addr and id_kill = '0') else
+              ex_mem_rf_data when (id_q.rs1 = ex_mem_rd_addr and id_kill = '0') else
+              mem_wb_rf_data when (id_q.rs1 = mem_wb_rd_addr and id_kill = '0') else
               rs1_data;
 
     -- forwarding to ALU input multiplexer
-    id_op2 <= ex_q.alu_result when (id_q.rs2 = id_ex_rd_addr) else
-              ex_mem_rf_data when (id_q.rs2 = ex_mem_rd_addr) else
-              mem_wb_rf_data when (id_q.rs2 = mem_wb_rd_addr) else
+    id_op2 <= ex_q.alu_result when (id_q.rs2 = id_ex_rd_addr and id_kill = '0') else
+              ex_mem_rf_data when (id_q.rs2 = ex_mem_rd_addr and id_kill = '0') else
+              mem_wb_rf_data when (id_q.rs2 = mem_wb_rd_addr and id_kill = '0') else
               rs2_data;
 
     -- branch prediction: for now, predict backward branches as TAKEN
