@@ -5,6 +5,7 @@ library ieee;
 use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
 --use ieee.std_logic_textio.all;
+use work.std_logic_textio.all;
 
 use std.textio.all;
 
@@ -31,27 +32,27 @@ architecture rtl of dpram is
     type ram_t is array(0 to 2**g_addr_width-1) of word_t;
 
     -- function to initialize the RAM from a file
-    --impure function init_ram(fn : in string) return ram_t is
-    --    file f       : text;
-    --    variable l   : line;
-    --    variable ram : ram_t;
-    --begin
-    --    if g_init = true then
-    --        file_open(f, fn, READ_MODE);
-    --        for i in ram_t'range loop
-    --            readline(f, l);
-    --            read(l, ram(i));
-    --        end loop;
-    --        file_close(f);
-    --    else
-    --        ram := (others => (others => '0'));
-    --    end if;
+    impure function init_ram(fn : in string) return ram_t is
+        file f       : text;
+        variable l   : line;
+        variable ram : ram_t;
+    begin
+        if g_init = true then
+            file_open(f, fn, READ_MODE);
+            for i in ram_t'range loop
+                readline(f, l);
+                read(l, ram(i));
+            end loop;
+            file_close(f);
+        else
+            ram := (others => (others => '0'));
+        end if;
 
-    --    return ram;
-    --end function;
+        return ram;
+    end function;
 
     -- Declare the RAM
-    shared variable ram : ram_t := (others => (others => '0')); --init_ram(g_init_file);
+    shared variable ram : ram_t := init_ram(g_init_file); --(others => (others => '0'));
 
 begin
     -- Port A
