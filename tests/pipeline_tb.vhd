@@ -15,13 +15,16 @@ architecture testbench of pipeline_tb is
     signal rst_n : std_logic := '1';
 
     -- inputs
-    signal insn_in        : word      := (others => '0');
-    signal insn_addr      : word      := (others => '0');
-    signal insn_valid     : std_logic := '0';
-    signal data_in        : word      := (others => '0');
-    signal data_in2       : word      := (others => '0');
-    signal data_in_valid  : std_logic := '0';
-    signal data_in_valid2 : std_logic := '0';
+    signal insn_in    : word      := (others => '0');
+    signal insn_addr  : word      := (others => '0');
+    signal insn_valid : std_logic := '0';
+
+    -- shift registers to simulate delays in accessing memory
+    type data_in_sr_t is array (0 to 3) of word;
+    type data_in_valid_sr_t is array (0 to 3) of std_logic;
+
+    signal data_in       : data_in_sr_t       := (others => (others => '0'));
+    signal data_in_valid : data_in_valid_sr_t := (others => '0');
 
     -- outputs
     signal data_write_en : std_logic;
@@ -32,9 +35,10 @@ architecture testbench of pipeline_tb is
     -- simulation specific
     signal done         : boolean := false;
     constant clk_period : time    := 10 ns;  -- 100 MHz
+    file memfile : text open write_mode is "sim/memio.vec";
 
     -- data memory
-    type ram_t is array(0 to 100) of word;    
+    type ram_t is array(0 to 100) of word;
     signal ram : ram_t := (0      => "10000000000000001000000010000001",
                            others => (others => '0'));
 begin
@@ -43,7 +47,7 @@ begin
         generic map (g_data_width => 32,
                      g_addr_width => 7,
                      g_init       => true,
-                     g_init_file  => "test1.vec")
+                     g_init_file  => "sim/test1.vec")
         port map (clk    => clk,
                   addr_a => insn_addr(6 downto 0),
                   data_a => (others => '0'),
@@ -62,23 +66,54 @@ begin
         variable addr : integer;
     begin
         if rst_n = '0' then
-            data_in_valid <= '0';
-            data_in_valid2 <= '0';
+            reset_shift_regs : for i in data_in'range loop
+                data_in(i)       <= (others => '0');
+                data_in_valid(i) <= '0';
+            end loop reset_shift_regs;
         elsif rising_edge(clk) then
-            data_in_valid <= '0';
+            -- default values
+            data_in_valid(0) <= '0';
+            data_in(0)       <= (others => '0');
 
-            data_in2 <= data_in;
-            data_in_valid2 <= data_in_valid;
-            
+            -- create shift registers
+            shift_regs : for i in data_in'low + 1 to data_in'high loop
+                data_in(i)       <= data_in(i - 1);
+                data_in_valid(i) <= data_in_valid(i - 1);
+            end loop shift_regs;
+
+            -- writes/reads
             addr := to_integer(unsigned(data_addr));
             if data_write_en = '1' then
                 ram(addr) <= data_out;
             elsif data_read_en = '1' then
-                data_in       <= ram(addr);
-                data_in_valid <= '1';
+                data_in(0)       <= ram(addr);
+                data_in_valid(0) <= '1';
             end if;
         end if;
     end process ram_proc;
+
+    ---------------------------------------------------
+    -- print memory bus transactions
+    ---------------------------------------------------
+    log_memio_proc : process (data_in, data_out, data_addr, data_write_en, data_read_en, data_in_valid) is
+        variable l : line;
+    begin  -- process log_memio_proc
+        if data_write_en = '1' then
+            write(l, string'("W "));
+            write(l, hstr(data_addr));
+            write(l, string'(", "));
+            write(l, hstr(data_out));
+            writeline(memfile, l);
+        end if;
+
+        if (data_read_en = '1' and data_in_valid(data_in_valid'high) = '1') then
+            write(l, string'("R "));
+            write(l, hstr(data_addr));
+            write(l, string'(", "));
+            write(l, hstr(data_in(data_in'high)));
+            writeline(memfile, l);
+        end if;
+    end process log_memio_proc;
 
     -- instantiate the unit under test
     uut : entity work.pipeline(Behavioral)
@@ -91,12 +126,12 @@ begin
             insn_in       => insn_in,
             insn_addr     => insn_addr,
             insn_valid    => insn_valid,
-            data_in       => data_in2,
+            data_in       => data_in(data_in'high),
             data_out      => data_out,
             data_addr     => data_addr,
             data_write_en => data_write_en,
             data_read_en  => data_read_en,
-            data_in_valid => data_in_valid2);
+            data_in_valid => data_in_valid(data_in_valid'high));
 
     -- purpose: Provide stimulus to test the pipeline
     stimulus_proc : process is
@@ -106,7 +141,7 @@ begin
         println ("Beginning simulation");
 
         -- fill up the instruction memory
-        rst_n     <= '0';
+        rst_n <= '0';
         wait for clk_period * 2;
         rst_n <= '1';
 

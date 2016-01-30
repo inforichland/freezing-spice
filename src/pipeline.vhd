@@ -5,7 +5,7 @@
 -- File       : pipeline.vhd
 -- Author     :   Tim Wawrzynczak
 -- Created    : 2015-07-07
--- Last update: 2016-01-28
+-- Last update: 2016-01-30
 -- Platform   : FPGA
 -- Standard   : VHDL'93/02
 -------------------------------------------------------------------------------
@@ -30,8 +30,9 @@ use work.id_pkg.all;
 use work.ex_pkg.all;
 
 entity pipeline is
-    generic (g_initial_pc : unsigned(31 downto 0) := (others => '0');
-             g_for_sim    : boolean               := false);
+    generic (g_initial_pc      : unsigned(31 downto 0) := (others => '0');
+             g_for_sim         : boolean               := false;
+             g_regout_filename : string                := "sim/regout.vec");
     port (clk   : in std_logic;
           rst_n : in std_logic;
 
@@ -159,7 +160,8 @@ architecture Behavioral of pipeline is
     signal id_kill      : std_logic;
     signal id_stall     : std_logic;
     signal full_stall   : std_logic;
-    
+
+    file regout_file : text open write_mode is g_regout_filename;
 begin  -- architecture Behavioral
 
     -------------------------------------------------
@@ -174,7 +176,7 @@ begin  -- architecture Behavioral
     data_write_en <= mem_we;
     data_addr     <= mem_data_addr;
     data_out      <= mem_data_out;
-
+    
     -------------------------------------------------
     -- Detect when stalling / killing is necessary
     -------------------------------------------------
@@ -240,15 +242,15 @@ begin  -- architecture Behavioral
         port map (if_id_ir, id_q);
 
     -- forwarding to ALU input multiplexer
-    id_op1 <= ex_q.alu_result when (id_q.rs1 = id_ex_rd_addr and id_kill = '0') else
-              ex_mem_rf_data when (id_q.rs1 = ex_mem_rd_addr and id_kill = '0') else
-              mem_wb_rf_data when (id_q.rs1 = mem_wb_rd_addr and id_kill = '0') else
+    id_op1 <= ex_q.alu_result when (id_q.rs1 = id_ex_rd_addr and id_q.rs1 /= "00000" and id_kill = '0') else
+              ex_mem_rf_data when (id_q.rs1 = ex_mem_rd_addr and id_q.rs1 /= "00000" and id_kill = '0') else
+              mem_wb_rf_data when (id_q.rs1 = mem_wb_rd_addr and id_q.rs1 /= "00000" and id_kill = '0') else
               rs1_data;
 
     -- forwarding to ALU input multiplexer
-    id_op2 <= ex_q.alu_result when (id_q.rs2 = id_ex_rd_addr and id_kill = '0') else
-              ex_mem_rf_data when (id_q.rs2 = ex_mem_rd_addr and id_kill = '0') else
-              mem_wb_rf_data when (id_q.rs2 = mem_wb_rd_addr and id_kill = '0') else
+    id_op2 <= ex_q.alu_result when (id_q.rs2 = id_ex_rd_addr and id_q.rs2 /= "00000" and id_kill = '0') else
+              ex_mem_rf_data when (id_q.rs2 = ex_mem_rd_addr and id_q.rs2 /= "00000" and id_kill = '0') else
+              mem_wb_rf_data when (id_q.rs2 = mem_wb_rd_addr and id_q.rs2 /= "00000" and id_kill = '0') else
               rs2_data;
 
     -- branch prediction: for now, predict backward branches as TAKEN
@@ -488,4 +490,21 @@ begin  -- architecture Behavioral
     wb_rf_wr_en   <= mem_wb_rf_we;
     wb_rf_wr_data <= mem_wb_lmd when (mem_wb_insn_type = OP_LOAD) else mem_wb_rf_data;
 
+    ---------------------------------------------------
+    -- print register file writebacks
+    ---------------------------------------------------
+    log_regs : if (g_for_sim = true) generate
+        log_regs_proc : process (wb_rf_wr_addr, wb_rf_wr_en, wb_rf_wr_data) is
+            variable l : line;
+        begin  -- process print_decode_proc
+            if wb_rf_wr_en = '1' then
+                write(l, hstr(wb_rf_wr_addr));
+                write(l, string'(", "));
+                write(l, hstr(wb_rf_wr_data));
+                writeline(regout_file, l);
+                writeline(output, l);
+            end if;
+        end process log_regs_proc;
+    end generate log_regs;
+    
 end architecture Behavioral;
