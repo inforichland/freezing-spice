@@ -13,6 +13,7 @@ TESTS = pipeline_tb decoder_tb compare_tb
 TEST_VECTORS=tests/test_config
 
 SIM_PATH=sim/
+SIM_OUTPUTS=$(addprefix $(SIM_PATH), memio.vec regout.vec)
 
 # Default target
 .PHONY: all
@@ -41,3 +42,4 @@ input_vectors: $(TEST_VECTORS)
 clean:
 	$(GHDL) --clean
 	rm *.cf *.vcd
+	rm $(SIM_OUTPUTS)

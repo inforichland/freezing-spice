@@ -502,7 +502,6 @@ begin  -- architecture Behavioral
                 write(l, string'(", "));
                 write(l, hstr(wb_rf_wr_data));
                 writeline(regout_file, l);
-                writeline(output, l);
             end if;
         end process log_regs_proc;
     end generate log_regs;
