@@ -21,9 +21,9 @@ architecture testbench of pipeline_tb is
     signal insn_valid : std_logic := '0';
 
     -- shift registers to simulate delays in accessing memory
-    type data_in_sr_t is array (0 to 3) of word;
-    type data_in_valid_sr_t is array (0 to 3) of std_logic;
-
+    constant c_data_in_delay : integer := 4;  -- number of delay cycles for memory reads
+    type data_in_sr_t is array (0 to c_data_in_delay - 1) of word;
+    type data_in_valid_sr_t is array (0 to c_data_in_delay - 1) of std_logic;
     signal data_in       : data_in_sr_t       := (others => (others => '0'));
     signal data_in_valid : data_in_valid_sr_t := (others => '0');
 

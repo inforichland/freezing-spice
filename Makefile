@@ -4,7 +4,7 @@ GHDLRUNFLAGS=
 
 # Correct order is crucial to avoid ghdl error
 SRC_PATH = src/
-SRC = $(addprefix $(SRC_PATH), std_logic_textio.vhd common.vhd id_pkg.vhd decode.vhd encode_pkg.vhd alu.vhd compare_unit.vhd ex_pkg.vhd ex.vhd id.vhd if_pkg.vhd if.vhd regfile.vhd pipeline.vhd dpram.vhd)
+SRC = $(addprefix $(SRC_PATH), std_logic_textio.vhd common.vhd id_pkg.vhd encode_pkg.vhd alu.vhd compare_unit.vhd ex_pkg.vhd ex.vhd id.vhd if_pkg.vhd if.vhd regfile.vhd pipeline.vhd dpram.vhd)
 
 TB_PATH=tests/
 TB = $(addprefix $(TB_PATH), pipeline_tb.vhd)
@@ -20,7 +20,7 @@ SIM_OUTPUTS=$(addprefix $(SIM_PATH), memio.vec regout.vec)
 
 # Default target
 .PHONY: all
-all: input_vectors $(TESTS)
+all: input_vectors $(TESTS) pipeline_tb
 
 .PHONY: tests
 tests: $(TESTS) pipeline_tb

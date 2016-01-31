@@ -151,9 +151,9 @@ architecture testbench of decoder_tb is
     
 begin  -- architecture test
 
-    uut : entity work.decoder(behavioral)
-        port map (insn    => insn,
-                  decoded => decoded);
+    uut : entity work.instruction_decoder(behavioral)
+        port map (d => insn,
+                  q => decoded);
 
     -- purpose: provide stimulus and verification of the RISCV decoder
     -- type   : combinational
@@ -306,7 +306,7 @@ begin  -- architecture test
         insn <= encode_r_type(R_SUB, 16, 31, 1);
         wait for 1 ns;
         verify_r_type(OP_ALU, R_SUB, "10000", "11111", "00001");
-        
+
         -- SLL
         insn <= encode_r_type(R_SLL, 0, 0, 0);
         wait for 1 ns;
@@ -336,7 +336,7 @@ begin  -- architecture test
         insn <= encode_r_type(R_SRA, 0, 0, 0);
         wait for 1 ns;
         verify_r_type(OP_ALU, R_SRA, "00000", "00000", "00000");
-        
+
         -- OR
         insn <= encode_r_type(R_OR, 0, 0, 0);
         wait for 1 ns;
