@@ -6,6 +6,7 @@ use std.textio.all;
 use work.common.all;
 use work.id_pkg.all;
 use work.encode_pkg.all;
+use work.test_config.all;
 
 entity pipeline_tb is
 end entity pipeline_tb;
@@ -47,7 +48,7 @@ begin
         generic map (g_data_width => 32,
                      g_addr_width => 7,
                      g_init       => true,
-                     g_init_file  => "sim/test1.vec")
+                     g_init_file  => pipeline_tb_test_vector_input_filename)
         port map (clk    => clk,
                   addr_a => insn_addr(6 downto 0),
                   data_a => (others => '0'),

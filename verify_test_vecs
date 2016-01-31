@@ -1,5 +1,5 @@
 #!/bin/bash
 # diff this simulation run's output files against the "golden" ones for test1
 
-diff -s sim/memio.vec sim/memio_test1.vec
-diff -s sim/regout.vec sim/regout_test1.vec
+diff -s sim/memio.vec sim/memio_$1.vec
+diff -s sim/regout.vec sim/regout_$1.vec
