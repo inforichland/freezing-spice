@@ -13,7 +13,7 @@ TB = $(addprefix $(TB_PATH), pipeline_tb.vhd)
 TESTS_PATH = tests/
 TESTS = decoder_tb compare_tb
 
-TEST_VECTORS=$(TESTS_PATH)/test_config1 $(TESTS_PATH)/test_config2
+TEST_VECTORS=$(TESTS_PATH)/test_config1 $(TESTS_PATH)/test_config2 $(TESTS_PATH)/test_config3
 
 SIM_PATH=sim/
 SIM_OUTPUTS=$(addprefix $(SIM_PATH), memio.vec regout.vec)
@@ -50,7 +50,15 @@ test2:
 	$(GHDL) -e $(GHDLFLAGS) 	pipeline_tb
 	$(GHDL) -r $(GHDLRUNFLAGS) 	pipeline_tb --vcd=pipeline_tb_test2.vcd
 	./verify_test_vecs test2
-.PHONY: test1
+.PHONY: test2
+
+# test case 3
+test3:
+	$(GHDL) -a $(GHDLFLAGS) 	$(SRC) $(TESTS_PATH)/test_config3.vhd $(TB)
+	$(GHDL) -e $(GHDLFLAGS) 	pipeline_tb
+	$(GHDL) -r $(GHDLRUNFLAGS) 	pipeline_tb --vcd=pipeline_tb_test3.vcd
+	./verify_test_vecs test3
+.PHONY: test3
 
 # generation of test vectors
 .PHONY: $(TEST_VECTORS)

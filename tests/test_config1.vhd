@@ -42,9 +42,6 @@ package test_config is
                                96 => NOP,
                                others => (others => '0'));
 
-    -- Test 3 (TODO): WAW, WAR, RAW, reads/writes to register 0,
-    -- incorrectly-predicted-taken backwards branch
-
     -- with current branch prediction scheme (backwards as taken, forwards as not-taken),
     -- these are the only 3 scenarios that can happen w/ regards to branches.
     

@@ -5,7 +5,7 @@
 -- File       : pipeline.vhd
 -- Author     :   Tim Wawrzynczak
 -- Created    : 2015-07-07
--- Last update: 2016-01-30
+-- Last update: 2016-02-03
 -- Platform   : FPGA
 -- Standard   : VHDL'93/02
 -------------------------------------------------------------------------------
@@ -192,8 +192,8 @@ begin  -- architecture Behavioral
     ---------------------------------------------------
 
     -- inputs
-    if_d.stall   <= ex_mem_load_pc or branch_stall;  -- or id_predict_taken;
-    if_d.load_pc <= ex_mem_load_pc or id_predict_taken;
+    if_d.stall   <= ex_mem_load_pc or branch_stall;
+    if_d.load_pc <= ex_mem_load_pc or id_predict_taken or ex_branch_mispredict;
     if_d.next_pc <= ex_mem_next_pc when (ex_mem_load_pc = '1') else id_branch_pc;
 
     -- instantiation
@@ -287,7 +287,8 @@ begin  -- architecture Behavioral
                 id_ex_op2      <= id_op2;
                 id_ex_use_imm  <= id_q.use_imm;
 
-                if (id_kill = '1') then
+                -- don't kill the branch instruction!
+                if (id_kill = '1' and id_predict_taken = '0') then 
                     id_ex_ir          <= NOP;
                     id_ex_rd_addr     <= (others => '0');
                     id_ex_insn_type   <= OP_STALL;
@@ -298,8 +299,7 @@ begin  -- architecture Behavioral
                     id_ex_branch_type <= BRANCH_NONE;
                     id_ex_load_type   <= LOAD_NONE;
                     id_ex_store_type  <= STORE_NONE;
-                else
-                    -- instruction issue
+                else  -- instruction issue
                     id_ex_pc          <= if_id_pc;
                     id_ex_ir          <= if_id_ir;
                     id_ex_rd_addr     <= id_q.rd;
@@ -338,15 +338,27 @@ begin  -- architecture Behavioral
             write(l, string'("  : "));
             write(l, hstr(id_ex_ir));
             writeline(output, l);
-            print_insn(id_ex_insn_type);
-            print(id_ex_insn_type);
+            if (id_ex_ir = NOP) then
+                write(l, string'("Instruction type: NOP"));
+                writeline(output, l);
+            else
+                print_insn(id_ex_insn_type);
+            end if;
 
+            print(id_ex_insn_type);
+            
             if id_ex_taken = '1' then
                 write(l, string'("Predicting branch as taken, redirecting PC to "));
                 writeline(output, l);
                 print(id_branch_pc);
             end if;
 
+            if (ex_branch_mispredict = '1') then
+                write(l, string'("Branch incorrectly predicted, continuing . . ."));
+                writeline(output, l);
+                print(id_branch_pc);
+            end if;
+            
             writeline(output, l);
         end process print_decode_proc;
     end generate print_decode;
@@ -381,7 +393,7 @@ begin  -- architecture Behavioral
 
     -- check for misprediction.
     ex_branch_mispredict <= '1' when (id_ex_insn_type = OP_BRANCH and ex_q.compare_result = '0' and id_ex_taken = '1') else '0';
-
+    
     -- multiplexer for data memory address
     ex_data_addr <= ex_q.alu_result when (id_ex_insn_type = OP_LOAD or id_ex_insn_type = OP_STORE) else ex_mem_data_addr;
 
