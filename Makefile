@@ -6,14 +6,16 @@ GHDLRUNFLAGS=
 SRC_PATH = src/
 SRC = $(addprefix $(SRC_PATH), std_logic_textio.vhd common.vhd id_pkg.vhd encode_pkg.vhd alu.vhd compare_unit.vhd ex_pkg.vhd ex.vhd id.vhd if_pkg.vhd if.vhd regfile.vhd csr.vhd pipeline.vhd dpram.vhd)
 
-TB_PATH=tests/
-TB = $(addprefix $(TB_PATH), pipeline_tb.vhd)
+# 
+PIPELINE_TB=tests/pipeline_tb.vhd
 
-#Name of each test
-TESTS_PATH = tests/
+#Name of each (non-pipeline) test
+TESTS_PATH = tests
 TESTS = decoder_tb compare_tb
 
-TEST_VECTORS=$(TESTS_PATH)/test_config1 $(TESTS_PATH)/test_config2 $(TESTS_PATH)/test_config3
+# Pipeline testbench vectors
+PIPELINE_TB_TEST_NUMBERS=1 2 3
+TEST_VECTORS=$(addprefix $(TESTS_PATH)/test_config, $(PIPELINE_TB_TEST_NUMBERS))
 
 SIM_PATH=sim/
 SIM_OUTPUTS=$(addprefix $(SIM_PATH), memio.vec regout.vec)
@@ -21,6 +23,7 @@ SIM_OUTPUTS=$(addprefix $(SIM_PATH), memio.vec regout.vec)
 # Default target
 .PHONY: all
 all: input_vectors $(TESTS) pipeline_tb
+	@echo $(TEST_VECTORS)
 
 .PHONY: tests
 tests: $(TESTS) pipeline_tb
@@ -38,7 +41,7 @@ pipeline_tb: input_vectors test1 test2
 
 # test case 1
 test1: input_vectors
-	$(GHDL) -a $(GHDLFLAGS) 	$(SRC) $(TESTS_PATH)/test_config1.vhd $(TB)
+	$(GHDL) -a $(GHDLFLAGS) 	$(SRC) $(TESTS_PATH)/test_config1.vhd $(PIPELINE_TB)
 	$(GHDL) -e $(GHDLFLAGS) 	pipeline_tb
 	$(GHDL) -r $(GHDLRUNFLAGS) 	pipeline_tb --vcd=pipeline_tb_test1.vcd
 	./verify_test_vecs test1
@@ -46,15 +49,15 @@ test1: input_vectors
 
 # test case 2
 test2: input_vectors
-	$(GHDL) -a $(GHDLFLAGS) 	$(SRC) $(TESTS_PATH)/test_config2.vhd $(TB)
+	$(GHDL) -a $(GHDLFLAGS) 	$(SRC) $(TESTS_PATH)/test_config2.vhd $(PIPELINE_TB)
 	$(GHDL) -e $(GHDLFLAGS) 	pipeline_tb
 	$(GHDL) -r $(GHDLRUNFLAGS) 	pipeline_tb --vcd=pipeline_tb_test2.vcd
 	./verify_test_vecs test2
 .PHONY: test2
 
 # test case 3
-test3:
-	$(GHDL) -a $(GHDLFLAGS) 	$(SRC) $(TESTS_PATH)/test_config3.vhd $(TB)
+test3: input_vectors
+	$(GHDL) -a $(GHDLFLAGS) 	$(SRC) $(TESTS_PATH)/test_config3.vhd $(PIPELINE_TB)
 	$(GHDL) -e $(GHDLFLAGS) 	pipeline_tb
 	$(GHDL) -r $(GHDLRUNFLAGS) 	pipeline_tb --vcd=pipeline_tb_test3.vcd
 	./verify_test_vecs test3

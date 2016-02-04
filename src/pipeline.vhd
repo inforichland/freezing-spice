@@ -190,7 +190,7 @@ begin  -- architecture Behavioral
     -- Detect when stalling / killing is necessary
     -------------------------------------------------
     if_kill  <= ex_mem_load_pc or (not insn_valid) or id_predict_taken or ex_branch_mispredict;
-    if_stall <= ex_mem_load_pc or branch_stall;  -- or id_predict_taken
+    if_stall <= ex_mem_load_pc or branch_stall;
     id_kill  <= ex_mem_load_pc or id_predict_taken or ex_branch_mispredict;
     id_stall <= branch_stall;
 
@@ -204,7 +204,7 @@ begin  -- architecture Behavioral
 
     -- inputs
     if_d.stall   <= if_stall;
-    if_d.load_pc <= ex_mem_load_pc or id_predict_taken;
+    if_d.load_pc <= ex_mem_load_pc or id_predict_taken or ex_branch_mispredict;
     if_d.next_pc <= ex_mem_next_pc when (ex_mem_load_pc = '1') else id_branch_pc;
 
     -- instantiation
@@ -301,7 +301,7 @@ begin  -- architecture Behavioral
                 id_ex_use_imm  <= id_q.use_imm;
 
                 -- don't kill the branch instruction!
-                if (id_kill = '1' and id_predict_taken = '0') then 
+                if (id_kill = '1' and id_predict_taken = '0') then
                     id_ex_ir          <= NOP;
                     id_ex_rd_addr     <= (others => '0');
                     id_ex_insn_type   <= OP_STALL;
@@ -354,9 +354,11 @@ begin  -- architecture Behavioral
             variable l : line;
         begin  -- process print_decode_proc
             write(l, to_integer(unsigned(id_ex_pc)));
-            write(l, string'("  : "));
+            write(l, string'("  : 0x"));
             write(l, hstr(id_ex_ir));
             writeline(output, l);
+
+            -- differentiate NOPs in the simulation output
             if (id_ex_ir = NOP) then
                 write(l, string'("Instruction type: NOP"));
                 writeline(output, l);
@@ -365,7 +367,7 @@ begin  -- architecture Behavioral
             end if;
 
             print(id_ex_insn_type);
-            
+
             if id_ex_taken = '1' then
                 write(l, string'("Predicting branch as taken, redirecting PC to "));
                 writeline(output, l);
@@ -377,7 +379,7 @@ begin  -- architecture Behavioral
                 writeline(output, l);
                 print(id_branch_pc);
             end if;
-            
+
             writeline(output, l);
         end process print_decode_proc;
     end generate print_decode;
@@ -427,7 +429,7 @@ begin  -- architecture Behavioral
 
     -- check for misprediction.
     ex_branch_mispredict <= '1' when (id_ex_insn_type = OP_BRANCH and ex_q.compare_result = '0' and id_ex_taken = '1') else '0';
-    
+
     -- multiplexer for data memory address
     ex_data_addr <= ex_q.alu_result when (id_ex_insn_type = OP_LOAD or id_ex_insn_type = OP_STORE) else ex_mem_data_addr;
 

@@ -28,6 +28,7 @@ package test_config is
                                28     => encode_i_type(I_ADDI, "000000000111", 0, 1),  -- ADDI x0, x1, 7
                                32     => encode_i_type(I_ADDI, "000000000001", 0, 1),  -- ADDI x0, x1, 1
                                36     => encode_i_type(I_ADDI, "000000011111", 1, 11),  -- ADDI x1, x11, 20
+                               40     => encode_i_csr(CSR_INSTRET, 12),
                                others => NOP);
 
     type test_config_t is record
