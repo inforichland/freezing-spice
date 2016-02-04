@@ -95,6 +95,8 @@ architecture Behavioral of pipeline is
     signal id_ex_store_type  : store_type_t                 := STORE_NONE;
     signal id_ex_rf_we       : std_logic                    := '0';
     signal id_ex_taken       : std_logic                    := '0';
+    signal id_ex_is_csr      : std_logic                    := '0';
+    signal id_ex_csr_addr    : csr_addr_t                   := (others => '0');
 
     -------------------------------------------------
     -- EX signals
@@ -105,6 +107,9 @@ architecture Behavioral of pipeline is
     signal ex_load_pc           : std_logic;
     signal ex_data_addr         : word;
     signal ex_branch_mispredict : std_logic;
+    signal ex_csr_cycle_valid   : std_logic;
+    signal ex_csr_timer_tick    : std_logic;
+    signal ex_csr_instret       : std_logic;
 
     -------------------------------------------------
     -- EX/MEM pipeline registers
@@ -122,19 +127,22 @@ architecture Behavioral of pipeline is
     signal ex_mem_data_out    : word                         := (others => '0');
     signal ex_mem_rs1_addr    : std_logic_vector(4 downto 0) := (others => '0');
     signal ex_mem_rs2_addr    : std_logic_vector(4 downto 0) := (others => '0');
+    signal ex_mem_csr_value   : word                         := (others => '0');
+    signal ex_mem_is_csr      : std_logic                    := '0';
 
     -------------------------------------------------
     -- MEM signals
     -------------------------------------------------
-    signal mem_we        : std_logic;
-    signal mem_re        : std_logic;
-    signal mem_data_addr : word;
-    signal mem_data_out  : word;
-    signal mem_lmd_lh    : word;
-    signal mem_lmd_lb    : word;
-    signal mem_lmd_lhu   : word;
-    signal mem_lmd_lbu   : word;
-    signal mem_lmd       : word;
+    signal mem_we          : std_logic;
+    signal mem_re          : std_logic;
+    signal mem_data_addr   : word;
+    signal mem_data_out    : word;
+    signal mem_lmd_lh      : word;
+    signal mem_lmd_lb      : word;
+    signal mem_lmd_lhu     : word;
+    signal mem_lmd_lbu     : word;
+    signal mem_lmd         : word;
+    signal mem_rf_data_mux : word;
 
     -------------------------------------------------
     -- MEM/WB pipeline registers
@@ -153,10 +161,11 @@ architecture Behavioral of pipeline is
     signal wb_rf_wr_data : word;
 
     -------------------------------------------------
-    -- Stalling
+    -- Stalling / killing
     -------------------------------------------------
     signal branch_stall : std_logic;
     signal if_kill      : std_logic;
+    signal if_stall     : std_logic;
     signal id_kill      : std_logic;
     signal id_stall     : std_logic;
     signal full_stall   : std_logic;
@@ -176,15 +185,17 @@ begin  -- architecture Behavioral
     data_write_en <= mem_we;
     data_addr     <= mem_data_addr;
     data_out      <= mem_data_out;
-    
+
     -------------------------------------------------
     -- Detect when stalling / killing is necessary
     -------------------------------------------------
+    if_kill  <= ex_mem_load_pc or (not insn_valid) or id_predict_taken or ex_branch_mispredict;
+    if_stall <= ex_mem_load_pc or branch_stall;  -- or id_predict_taken
+    id_kill  <= ex_mem_load_pc or id_predict_taken or ex_branch_mispredict;
+    id_stall <= branch_stall;
+
     branch_stall <= '1' when (id_ex_insn_type = OP_JAL or id_ex_insn_type = OP_JALR or
                               (id_ex_insn_type = OP_BRANCH and ex_q.compare_result = '1')) else '0';
-    id_stall   <= branch_stall;
-    if_kill    <= ex_mem_load_pc or (not insn_valid) or id_predict_taken or ex_branch_mispredict;
-    id_kill    <= ex_mem_load_pc or id_predict_taken or ex_branch_mispredict;
     full_stall <= '1' when (ex_mem_insn_type = OP_LOAD and data_in_valid = '0') else '0';
 
     ---------------------------------------------------
@@ -192,8 +203,8 @@ begin  -- architecture Behavioral
     ---------------------------------------------------
 
     -- inputs
-    if_d.stall   <= ex_mem_load_pc or branch_stall;
-    if_d.load_pc <= ex_mem_load_pc or id_predict_taken or ex_branch_mispredict;
+    if_d.stall   <= if_stall;
+    if_d.load_pc <= ex_mem_load_pc or id_predict_taken;
     if_d.next_pc <= ex_mem_next_pc when (ex_mem_load_pc = '1') else id_branch_pc;
 
     -- instantiation
@@ -277,6 +288,8 @@ begin  -- architecture Behavioral
             id_ex_op2       <= (others => '0');
             id_ex_ir        <= (others => '0');
             id_ex_insn_type <= OP_ILLEGAL;
+            id_ex_is_csr    <= '0';
+            id_ex_csr_addr  <= (others => '0');
         elsif (rising_edge(clk)) then
             id_ex_taken <= id_predict_taken;
 
@@ -299,7 +312,9 @@ begin  -- architecture Behavioral
                     id_ex_branch_type <= BRANCH_NONE;
                     id_ex_load_type   <= LOAD_NONE;
                     id_ex_store_type  <= STORE_NONE;
-                else  -- instruction issue
+                    id_ex_is_csr      <= '0';
+                    id_ex_csr_addr    <= (others => '0');
+                else
                     id_ex_pc          <= if_id_pc;
                     id_ex_ir          <= if_id_ir;
                     id_ex_rd_addr     <= id_q.rd;
@@ -311,6 +326,8 @@ begin  -- architecture Behavioral
                     id_ex_branch_type <= id_q.branch_type;
                     id_ex_load_type   <= id_q.load_type;
                     id_ex_store_type  <= id_q.store_type;
+                    id_ex_is_csr      <= id_q.is_csr;
+                    id_ex_csr_addr    <= id_q.csr_addr;
                 end if;
             elsif (id_stall = '1' and full_stall = '0') then
                 id_ex_ir          <= NOP;
@@ -323,6 +340,8 @@ begin  -- architecture Behavioral
                 id_ex_branch_type <= BRANCH_NONE;
                 id_ex_load_type   <= LOAD_NONE;
                 id_ex_store_type  <= STORE_NONE;
+                id_ex_is_csr      <= '0';
+                id_ex_csr_addr    <= (others => '0');
             end if;
         end if;
     end process id_ex_reg_proc;
@@ -378,9 +397,24 @@ begin  -- architecture Behavioral
     ex_d.branch_type <= id_ex_branch_type;
     ex_d.imm         <= id_ex_imm;
 
-    -- instantiation
+    -- instantiation of execution stage
     ex_stage : entity work.instruction_executor(Behavioral)
         port map (ex_d, ex_q);
+
+    -- inputs
+    ex_csr_cycle_valid <= '1' when rst_n = '1' else '0';
+    ex_csr_timer_tick  <= '0';          -- TODO: implement
+    ex_csr_instret     <= mem_we or wb_rf_wr_en;
+
+    -- instantiation of CSRs (core specific registers)
+    inst_csrs : entity work.csr(behavioral)
+        port map (clk     => clk,
+                  en      => id_ex_is_csr,
+                  addr    => id_ex_csr_addr,
+                  valid   => ex_csr_cycle_valid,
+                  tick    => ex_csr_timer_tick,
+                  instret => ex_csr_instret,
+                  value   => ex_mem_csr_value);
 
     -- multiplexer for Register File write data
     ex_rf_data <= ex_q.return_addr when (id_ex_insn_type = OP_JAL or id_ex_insn_type = OP_JALR) else
@@ -414,6 +448,7 @@ begin  -- architecture Behavioral
             ex_mem_rd_addr     <= (others => '0');
             ex_mem_insn_type   <= OP_STALL;
             ex_mem_rf_we       <= '0';
+            ex_mem_is_csr      <= '0';
         elsif (rising_edge(clk)) then
             if (full_stall = '0') then
                 ex_mem_next_pc    <= ex_q.alu_result;
@@ -428,6 +463,7 @@ begin  -- architecture Behavioral
                 ex_mem_rf_we      <= id_ex_rf_we;
                 ex_mem_rs1_addr   <= id_ex_rs1_addr;  -- only needed for forwarding
                 ex_mem_rs2_addr   <= id_ex_rs2_addr;  -- only needed for forwarding
+                ex_mem_is_csr     <= id_ex_is_csr;
             end if;
         end if;
     end process ex_mem_regs_proc;
@@ -467,6 +503,9 @@ begin  -- architecture Behavioral
         mem_lmd_lb  when LB,
         data_in     when others;
 
+    mem_rf_data_mux <= ex_mem_csr_value when ex_mem_is_csr = '1'
+                       else ex_mem_rf_data;
+
     ---------------------------------------------------
     -- MEM/WB pipeline registers
     ---------------------------------------------------
@@ -484,7 +523,7 @@ begin  -- architecture Behavioral
                 mem_wb_rd_addr   <= ex_mem_rd_addr;
                 mem_wb_rf_we     <= ex_mem_rf_we;
                 mem_wb_insn_type <= ex_mem_insn_type;
-                mem_wb_rf_data   <= ex_mem_rf_data;
+                mem_wb_rf_data   <= mem_rf_data_mux;
 
                 if (data_in_valid = '1') then
                     mem_wb_lmd <= mem_lmd;

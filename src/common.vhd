@@ -33,6 +33,7 @@ package common is
     constant OP_STORE   : insn_type_t := "0111";
     constant OP_ALU     : insn_type_t := "1000";
     constant OP_STALL   : insn_type_t := "1001";
+    constant OP_SYSTEM  : insn_type_t := "1010";
 
     subtype branch_type_t is std_logic_vector(2 downto 0);
     constant BRANCH_NONE : branch_type_t := "000";
@@ -57,11 +58,19 @@ package common is
     constant SH         : store_type_t := "10";
     constant SW         : store_type_t := "11";
 
+    subtype csr_addr_t is std_logic_vector(2 downto 0);
+    constant CSR_CYCLE    : csr_addr_t := "000";
+    constant CSR_CYCLEH   : csr_addr_t := "001";
+    constant CSR_TIME     : csr_addr_t := "010";
+    constant CSR_TIMEH    : csr_addr_t := "011";
+    constant CSR_INSTRET  : csr_addr_t := "100";
+    constant CSR_INSTRETH : csr_addr_t := "101";
+
     -- print a string with a newline
     procedure println (str : in    string);
     procedure print (slv   : in    std_logic_vector);
     procedure write(l      : inout line; slv : in std_logic_vector);
-    function hstr(slv : std_logic_vector) return string;
+    function hstr(slv      :       std_logic_vector) return string;
 
     -- instruction formats
     type r_insn_t is (R_ADD, R_SLT, R_SLTU, R_AND, R_OR, R_XOR, R_SLL, R_SRL, R_SUB, R_SRA);

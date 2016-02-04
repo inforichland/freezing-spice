@@ -39,7 +39,8 @@ package test_config is
                                84 => encode_i_type(I_ADDI, "000000000111", 0, 1),  -- ADDI x0, x1, 3     -- this should not get executed
                                88 => encode_i_type(I_ADDI, "000000000001", 0, 1),  -- ADDI x0, x1, 3     -- this should not get executed
                                92 => encode_i_type(I_ADDI, "000000011111", 1, 11),  -- ADDI x0, x1, 3     -- this should not get executed
-                               96 => NOP,
+                               96 => encode_i_csr(CSR_CYCLE, 12), -- RDCYCLE x12
+                               100 => encode_i_csr(CSR_INSTRET, 13),
                                others => (others => '0'));
 
     -- with current branch prediction scheme (backwards as taken, forwards as not-taken),

@@ -43,6 +43,10 @@ package encode_pkg is
                              shamt   : std_logic_vector(4 downto 0);
                              rs1, rd : register_t)
         return word;
+
+    function encode_i_csr (csr_addr : csr_addr_t;
+                           rd       : register_t)
+        return word;
     
 end package encode_pkg;
 
@@ -154,6 +158,29 @@ package body encode_pkg is
         end case;
         return result;
     end function encode_i_shift;
+
+    -- encode a CSR access instruction
+    function encode_i_csr (
+        csr_addr : csr_addr_t;
+        rd       : register_t)
+        return word is
+        variable result : word;
+    begin
+        case csr_addr is
+            when CSR_CYCLE    => result(31 downto 20) := "110000000000";
+            when CSR_CYCLEH   => result(31 downto 20) := "110010000000";
+            when CSR_TIME     => result(31 downto 20) := "110000000001";
+            when CSR_TIMEH    => result(31 downto 20) := "110010000001";
+            when CSR_INSTRET  => result(31 downto 20) := "110000000010";
+            when CSR_INSTRETH => result(31 downto 20) := "110010000010";
+            when others       => null;
+        end case;
+        result(19 downto 15) := "00000";
+        result(14 downto 12) := "010";
+        result(11 downto 7)  := std_logic_vector(to_unsigned(rd, 5));
+        result(6 downto 0)   := c_op_system;
+        return result;
+    end function encode_i_csr;
 
     -- purpose: encode an I-type instruction
     function encode_i_type (insn_type : i_insn_t;

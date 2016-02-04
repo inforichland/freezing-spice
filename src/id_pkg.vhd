@@ -26,8 +26,11 @@ package id_pkg is
         rs2_rd      : std_logic;
         use_imm     : std_logic;
         rf_we       : std_logic;
+        is_csr      : std_logic;
+        csr_addr    : csr_addr_t;
     end record decoded_t;
 
+    -- value of decoding after reset
     constant c_decoded_reset : decoded_t := (alu_func    => ALU_NONE,
                                              op2_src     => '0',
                                              insn_type   => OP_ILLEGAL,
@@ -42,7 +45,9 @@ package id_pkg is
                                              rs1_rd      => '0',
                                              rs2_rd      => '0',
                                              use_imm     => '0',
-                                             rf_we       => '0');
+                                             rf_we       => '0',
+                                             csr_addr    => (others => '0'),
+                                             is_csr      => '0');
 
     -- Constants
     constant c_op_load     : std_logic_vector(6 downto 0) := "0000011";
@@ -93,6 +98,9 @@ package body id_pkg is
             writeline(output, l);
         elsif insn_type = OP_STALL then
             write(l, string'("STALL"));
+            writeline(output, l);
+        elsif insn_type = OP_SYSTEM then
+            write(l, string'("SYSTEM"));
             writeline(output, l);
         else
             write(l, string'("ILLEGAL"));

@@ -6,7 +6,7 @@ use work.id_pkg.all;
 
 entity instruction_decoder is
     port (d : in  word;
-          q : out decoded_t);              -- decoded data
+          q : out decoded_t);           -- decoded data
 end entity instruction_decoder;
 
 architecture behavioral of instruction_decoder is
@@ -41,7 +41,7 @@ begin  -- architecture behavioral
         insn := d;
         rd   := insn(11 downto 7);
 
-        -- defaults & important fields
+        -- defaults & "global" fields
         opcode              := insn(6 downto 0);
         funct3              := insn(14 downto 12);
         decoded.rs1         <= insn(19 downto 15);
@@ -59,6 +59,8 @@ begin  -- architecture behavioral
         decoded.use_imm     <= '0';
         decoded.branch_type <= BRANCH_NONE;
         decoded.rf_we       <= '0';
+        decoded.is_csr      <= '0';
+        decoded.csr_addr    <= (others => '0');
 
         case (opcode) is
             -- Load Upper Immediate
@@ -68,7 +70,7 @@ begin  -- architecture behavioral
                 if (rd /= "00000") then
                     decoded.rf_we <= '1';
                 end if;
-                
+
             -- Add Upper Immediate to PC
             when c_op_auipc =>
                 decoded.insn_type <= OP_AUIPC;
@@ -209,12 +211,36 @@ begin  -- architecture behavioral
                     when others => null;
                 end case;
 
+            -- system functions
+            when c_op_system =>
+                decoded.insn_type <= OP_SYSTEM;
+
+                case (funct3) is
+                    when "010" =>                             -- CSR
+                        if insn(19 downto 15) = "00000" then  -- rs1 = 0
+                            decoded.is_csr <= '1';
+                            decoded.rf_we <= '1';
+                            
+                            case insn(31 downto 20) is
+                                when "110000000000" => decoded.csr_addr <= CSR_CYCLE;
+                                when "110010000000" => decoded.csr_addr <= CSR_CYCLEH;
+                                when "110000000001" => decoded.csr_addr <= CSR_TIME;
+                                when "110010000001" => decoded.csr_addr <= CSR_TIMEH;
+                                when "110000000010" => decoded.csr_addr <= CSR_INSTRET;
+                                when "110010000010" => decoded.csr_addr <= CSR_INSTRETH;
+                                when others         => null;
+                            end case;
+                        else
+                            decoded.insn_type <= OP_ILLEGAL;
+                        end if;
+                        
+                    when others => null;
+                end case;
+
                 -- @TODO other insnructions
                 --when c_op_misc_mem =>
                 --    insn_type <= OP_FENCE;
-                --when c_op_system =>
-                --    insn_type <= OP_SYSTEM;
-
+                
             when others =>
                 decoded.insn_type <= OP_ILLEGAL;
                 

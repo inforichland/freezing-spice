@@ -4,7 +4,7 @@ GHDLRUNFLAGS=
 
 # Correct order is crucial to avoid ghdl error
 SRC_PATH = src/
-SRC = $(addprefix $(SRC_PATH), std_logic_textio.vhd common.vhd id_pkg.vhd encode_pkg.vhd alu.vhd compare_unit.vhd ex_pkg.vhd ex.vhd id.vhd if_pkg.vhd if.vhd regfile.vhd pipeline.vhd dpram.vhd)
+SRC = $(addprefix $(SRC_PATH), std_logic_textio.vhd common.vhd id_pkg.vhd encode_pkg.vhd alu.vhd compare_unit.vhd ex_pkg.vhd ex.vhd id.vhd if_pkg.vhd if.vhd regfile.vhd csr.vhd pipeline.vhd dpram.vhd)
 
 TB_PATH=tests/
 TB = $(addprefix $(TB_PATH), pipeline_tb.vhd)
@@ -37,7 +37,7 @@ pipeline_tb: input_vectors test1 test2
 .PHONY: pipeline_tb
 
 # test case 1
-test1:
+test1: input_vectors
 	$(GHDL) -a $(GHDLFLAGS) 	$(SRC) $(TESTS_PATH)/test_config1.vhd $(TB)
 	$(GHDL) -e $(GHDLFLAGS) 	pipeline_tb
 	$(GHDL) -r $(GHDLRUNFLAGS) 	pipeline_tb --vcd=pipeline_tb_test1.vcd
@@ -45,7 +45,7 @@ test1:
 .PHONY: test1
 
 # test case 2
-test2:
+test2: input_vectors
 	$(GHDL) -a $(GHDLFLAGS) 	$(SRC) $(TESTS_PATH)/test_config2.vhd $(TB)
 	$(GHDL) -e $(GHDLFLAGS) 	pipeline_tb
 	$(GHDL) -r $(GHDLRUNFLAGS) 	pipeline_tb --vcd=pipeline_tb_test2.vcd
