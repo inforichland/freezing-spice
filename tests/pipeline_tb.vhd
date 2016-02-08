@@ -21,11 +21,11 @@ architecture testbench of pipeline_tb is
     signal insn_valid : std_logic := '0';
 
     -- shift registers to simulate delays in accessing memory
-    constant c_data_in_delay : integer := 4;  -- number of delay cycles for memory reads
+    constant c_data_in_delay : integer            := 4;  -- number of delay cycles for memory reads
     type data_in_sr_t is array (0 to c_data_in_delay - 1) of word;
     type data_in_valid_sr_t is array (0 to c_data_in_delay - 1) of std_logic;
-    signal data_in       : data_in_sr_t       := (others => (others => '0'));
-    signal data_in_valid : data_in_valid_sr_t := (others => '0');
+    signal data_in           : data_in_sr_t       := (others => (others => '0'));
+    signal data_in_valid     : data_in_valid_sr_t := (others => '0');
 
     -- outputs
     signal data_write_en : std_logic;
@@ -36,7 +36,7 @@ architecture testbench of pipeline_tb is
     -- simulation specific
     signal done         : boolean := false;
     constant clk_period : time    := 10 ns;  -- 100 MHz
-    file memfile : text open write_mode is "sim/memio.vec";
+    file memfile        : text open write_mode is "sim/memio.vec";
 
     -- data memory
     type ram_t is array(0 to 100) of word;
@@ -96,18 +96,18 @@ begin
     ---------------------------------------------------
     -- print memory bus transactions
     ---------------------------------------------------
-    log_memio_proc : process (data_in, data_out, data_addr, data_write_en, data_read_en, data_in_valid) is
+    log_memio_proc : process (data_write_en, data_read_en, data_in_valid, clk) is
         variable l : line;
     begin  -- process log_memio_proc
-        if data_write_en = '1' then
-            write(l, string'("W "));
-            write(l, hstr(data_addr));
-            write(l, string'(", "));
-            write(l, hstr(data_out));
-            writeline(memfile, l);
+        if data_write_en = '1' and clk = '0' then
+                write(l, string'("W "));
+                write(l, hstr(data_addr));
+                write(l, string'(", "));
+                write(l, hstr(data_out));
+                writeline(memfile, l);
         end if;
 
-        if (data_read_en = '1' and data_in_valid(data_in_valid'high) = '1') then
+        if (data_read_en = '1' and data_in_valid(data_in_valid'high) = '1' and clk = '0') then
             write(l, string'("R "));
             write(l, hstr(data_addr));
             write(l, string'(", "));

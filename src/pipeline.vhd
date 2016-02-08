@@ -5,7 +5,7 @@
 -- File       : pipeline.vhd
 -- Author     :   Tim Wawrzynczak
 -- Created    : 2015-07-07
--- Last update: 2016-02-03
+-- Last update: 2016-02-07
 -- Platform   : FPGA
 -- Standard   : VHDL'93/02
 -------------------------------------------------------------------------------
@@ -133,16 +133,17 @@ architecture Behavioral of pipeline is
     -------------------------------------------------
     -- MEM signals
     -------------------------------------------------
-    signal mem_we          : std_logic;
-    signal mem_re          : std_logic;
-    signal mem_data_addr   : word;
-    signal mem_data_out    : word;
-    signal mem_lmd_lh      : word;
-    signal mem_lmd_lb      : word;
-    signal mem_lmd_lhu     : word;
-    signal mem_lmd_lbu     : word;
-    signal mem_lmd         : word;
-    signal mem_rf_data_mux : word;
+    signal mem_we           : std_logic;
+    signal mem_re           : std_logic;
+    signal mem_data_addr    : word;
+    signal mem_data_out     : word;
+    signal mem_lmd_lh       : word;
+    signal mem_lmd_lb       : word;
+    signal mem_lmd_lhu      : word;
+    signal mem_lmd_lbu      : word;
+    signal mem_lmd          : word;
+    signal mem_rf_data_mux  : word;
+    signal mem_data_out_mux : word;
 
     -------------------------------------------------
     -- MEM/WB pipeline registers
@@ -478,23 +479,26 @@ begin  -- architecture Behavioral
     mem_we <= '1' when ex_mem_insn_type = OP_STORE else '0';
     mem_re <= '1' when ex_mem_insn_type = OP_LOAD  else '0';
 
+    -- first level of data memory output muxing
+    mem_data_out_mux <= mem_wb_lmd when (mem_wb_insn_type = OP_LOAD) else ex_mem_data_out;
+
     -- data memory interface multiplexers
     mem_data_addr <= ex_mem_data_addr;
-    mem_data_out  <= X"0000" & ex_mem_data_out(15 downto 0) when ex_mem_store_type = SH else
-                     X"000000" & ex_mem_data_out(7 downto 0) when ex_mem_store_type = SB else
-                     ex_mem_data_out;
+    mem_data_out  <= X"0000" & mem_data_out_mux(15 downto 0) when ex_mem_store_type = SH else
+                     X"000000" & mem_data_out_mux(7 downto 0) when ex_mem_store_type = SB else
+                     mem_data_out_mux;
 
     -- load halfword (signed)
-    mem_lmd_lh <= word(resize(signed(data_in(15 downto 0)), word'high + 1));
+    mem_lmd_lh <= word(resize(signed(data_in(15 downto 0)), word'length));
 
     -- load byte (signed)
-    mem_lmd_lb <= word(resize(signed(data_in(7 downto 0)), word'high + 1));
+    mem_lmd_lb <= word(resize(signed(data_in(7 downto 0)), word'length));
 
     -- load halfword unsigned
-    mem_lmd_lhu <= word(resize(unsigned(data_in(15 downto 0)), word'high + 1));
+    mem_lmd_lhu <= word(resize(unsigned(data_in(15 downto 0)), word'length));
 
     -- load byte unsigned
-    mem_lmd_lbu <= word(resize(unsigned(data_in(7 downto 0)), word'high + 1));
+    mem_lmd_lbu <= word(resize(unsigned(data_in(7 downto 0)), word'length));
 
     -- Load Memory Data register input
     with ex_mem_load_type select

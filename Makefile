@@ -23,7 +23,6 @@ SIM_OUTPUTS=$(addprefix $(SIM_PATH), memio.vec regout.vec)
 # Default target
 .PHONY: all
 all: input_vectors $(TESTS) pipeline_tb
-	@echo $(TEST_VECTORS)
 
 .PHONY: tests
 tests: $(TESTS) pipeline_tb
@@ -36,7 +35,7 @@ $(TESTS):
 .PHONY: $(TESTS)
 
 # pipeline_tb
-pipeline_tb: input_vectors test1 test2
+pipeline_tb: input_vectors test1 test2 test3
 .PHONY: pipeline_tb
 
 # test case 1
