@@ -30,7 +30,6 @@ Implementation
 TODO
 ----
 + Better tests!
-+ CSRs (Core Specific Registers)
 + Interrupts / Exceptions
 + More sophisticated Branch prediction
 + Caches
