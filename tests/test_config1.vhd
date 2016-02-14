@@ -8,7 +8,7 @@ package test_config is
     constant pipeline_tb_test_vector_input_filename : string := "sim/test1.vec";
 
     -- arrays of instructions
-    type ram_t is array (natural range 0 to 128) of word;
+    type ram_t is array (natural range 0 to 256) of word;
 
     -- Test 1 : add, RAW hazard, WAR hazard, predicted-not-taken (incorrectly) forward branch,
     -- unconditional branch, store to memory, load from stored memory (stalls)

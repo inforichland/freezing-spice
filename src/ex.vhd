@@ -30,7 +30,7 @@ begin  -- architecture Behavioral
                           ex_d.insn_type = OP_JAL or
                           ex_d.insn_type = OP_JALR or
                           ex_d.insn_type = OP_AUIPC)
-           else ex_d.rs1;
+           else ex_d.op1;
 
     -- ALU operand 2 multiplexer
     op2 <= ex_d.imm when ((ex_d.insn_type = OP_ALU and ex_d.use_imm = '1') or
@@ -40,7 +40,7 @@ begin  -- architecture Behavioral
                           ex_d.insn_type = OP_LOAD or
                           ex_d.insn_type = OP_STORE or
                           ex_d.insn_type = OP_AUIPC)
-           else ex_d.rs2;
+           else ex_d.op2;
 
     -- ALU
     arithmetic_logic_unit : entity work.alu(Behavioral)

@@ -39,7 +39,7 @@ pipeline_tb: input_vectors test1 test2 test3
 .PHONY: pipeline_tb
 
 # test case 1
-test1: input_vectors
+test1: sim/test1.vec tests/test_config1.vhd input_vectors
 	$(GHDL) -a $(GHDLFLAGS) 	$(SRC) $(TESTS_PATH)/test_config1.vhd $(PIPELINE_TB)
 	$(GHDL) -e $(GHDLFLAGS) 	pipeline_tb
 	$(GHDL) -r $(GHDLRUNFLAGS) 	pipeline_tb --vcd=pipeline_tb_test1.vcd
@@ -47,7 +47,7 @@ test1: input_vectors
 .PHONY: test1
 
 # test case 2
-test2: input_vectors
+test2: sim/test2.vec tests/test_config2.vhd input_vectors
 	$(GHDL) -a $(GHDLFLAGS) 	$(SRC) $(TESTS_PATH)/test_config2.vhd $(PIPELINE_TB)
 	$(GHDL) -e $(GHDLFLAGS) 	pipeline_tb
 	$(GHDL) -r $(GHDLRUNFLAGS) 	pipeline_tb --vcd=pipeline_tb_test2.vcd
@@ -55,7 +55,7 @@ test2: input_vectors
 .PHONY: test2
 
 # test case 3
-test3: input_vectors
+test3: sim/test3.vec tests/test_config3.vhd input_vectors
 	$(GHDL) -a $(GHDLFLAGS) 	$(SRC) $(TESTS_PATH)/test_config3.vhd $(PIPELINE_TB)
 	$(GHDL) -e $(GHDLFLAGS) 	pipeline_tb
 	$(GHDL) -r $(GHDLRUNFLAGS) 	pipeline_tb --vcd=pipeline_tb_test3.vcd

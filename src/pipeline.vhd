@@ -5,7 +5,7 @@
 -- File       : pipeline.vhd
 -- Author     :   Tim Wawrzynczak
 -- Created    : 2015-07-07
--- Last update: 2016-02-07
+-- Last update: 2016-02-14
 -- Platform   : FPGA
 -- Standard   : VHDL'93/02
 -------------------------------------------------------------------------------
@@ -153,6 +153,7 @@ architecture Behavioral of pipeline is
     signal mem_wb_rf_data   : word                         := (others => '0');
     signal mem_wb_insn_type : insn_type_t                  := OP_STALL;
     signal mem_wb_lmd       : word                         := (others => '0');
+    signal mem_wb_is_csr    : std_logic                    := '0';
 
     -------------------------------------------------
     -- WB signals
@@ -170,8 +171,14 @@ architecture Behavioral of pipeline is
     signal id_kill      : std_logic;
     signal id_stall     : std_logic;
     signal full_stall   : std_logic;
+    signal hazard_stall : std_logic;
 
     file regout_file : text open write_mode is g_regout_filename;
+
+    -- debug signals because VCD files can't contain information from VHDL records
+    signal debug_rs1        : std_logic_vector(4 downto 0);
+    signal debug_rs2        : std_logic_vector(4 downto 0);
+    signal debug_alu_result : word;
 begin  -- architecture Behavioral
 
     -------------------------------------------------
@@ -191,13 +198,24 @@ begin  -- architecture Behavioral
     -- Detect when stalling / killing is necessary
     -------------------------------------------------
     if_kill  <= ex_mem_load_pc or (not insn_valid) or id_predict_taken or ex_branch_mispredict;
-    if_stall <= ex_mem_load_pc or branch_stall;
+    if_stall <= ex_mem_load_pc or branch_stall or full_stall or hazard_stall;
     id_kill  <= ex_mem_load_pc or id_predict_taken or ex_branch_mispredict;
-    id_stall <= branch_stall;
+    id_stall <= branch_stall or full_stall or hazard_stall;
 
+    -- being lazy and stalling on reads of CSR writes
+    hazard_stall <= '1' when ((id_ex_is_csr = '1' and id_ex_rd_addr = id_q.rs1 and id_q.rs1 /= "00000" and id_ex_rf_we = '1')
+                              or (ex_mem_is_csr = '1' and ex_mem_rd_addr = id_q.rs1 and id_q.rs1 /= "00000" and ex_mem_rf_we = '1')
+                              or (mem_wb_is_csr = '1' and mem_wb_rd_addr = id_q.rs1 and id_q.rs1 /= "00000" and mem_wb_rf_we = '1')
+                              or (id_ex_is_csr = '1' and id_ex_rd_addr = id_q.rs2 and id_q.rs2 /= "00000" and id_ex_rf_we = '1')
+                              or (ex_mem_is_csr = '1' and ex_mem_rd_addr = id_q.rs2 and id_q.rs2 /= "00000" and ex_mem_rf_we = '1')
+                              or (mem_wb_is_csr = '1' and mem_wb_rd_addr = id_q.rs2 and id_q.rs2 /= "00000" and mem_wb_rf_we = '1'))
+                    else '0';
+    
     branch_stall <= '1' when (id_ex_insn_type = OP_JAL or id_ex_insn_type = OP_JALR or
                               (id_ex_insn_type = OP_BRANCH and ex_q.compare_result = '1')) else '0';
-    full_stall <= '1' when (ex_mem_insn_type = OP_LOAD and data_in_valid = '0') else '0';
+    full_stall <= '1' when (ex_mem_insn_type = OP_LOAD and data_in_valid = '0') else '0';  -- and
+--                            ((id_q.rs1 = ex_mem_rd_addr and id_q.rs1_rd = '1') or
+--                             (id_q.rs2 = ex_mem_rd_addr and id_q.rs2_rd = '1'))) else '0';
 
     ---------------------------------------------------
     -- Instruction fetch
@@ -222,7 +240,7 @@ begin  -- architecture Behavioral
             if_id_ir <= NOP;
             if_id_pc <= (others => '0');
         elsif (rising_edge(clk)) then
-            if (id_stall = '0' and full_stall = '0') then
+            if (id_stall = '0') then
                 if (if_kill = '1') then
                     if_id_ir <= NOP;
                 else
@@ -252,6 +270,9 @@ begin  -- architecture Behavioral
     -- instantiation of decoder
     id_stage : entity work.instruction_decoder(Behavioral)
         port map (if_id_ir, id_q);
+
+    debug_rs1 <= id_q.rs1;
+    debug_rs2 <= id_q.rs2;
 
     -- forwarding to ALU input multiplexer
     id_op1 <= ex_q.alu_result when (id_q.rs1 = id_ex_rd_addr and id_q.rs1 /= "00000" and id_kill = '0') else
@@ -352,7 +373,8 @@ begin  -- architecture Behavioral
     ---------------------------------------------------
     print_decode : if (g_for_sim = true) generate
         print_decode_proc : process (id_ex_ir, id_ex_pc, id_ex_insn_type, id_ex_taken) is
-            variable l : line;
+            variable l        : line;
+            variable op1, op2 : word;
         begin  -- process print_decode_proc
             write(l, to_integer(unsigned(id_ex_pc)));
             write(l, string'("  : 0x"));
@@ -368,6 +390,53 @@ begin  -- architecture Behavioral
             end if;
 
             print(id_ex_insn_type);
+
+            if id_ex_insn_type = OP_ALU then
+                if (id_ex_rs1_addr = ex_mem_rd_addr and ex_mem_insn_type = OP_LOAD) then
+                    write(l, string'("op1 := mem_lmd"));
+                    op1 := mem_lmd;
+                elsif (id_ex_rs1_addr = mem_wb_rd_addr and mem_wb_insn_type = OP_LOAD) then
+                    write(l, string'("op1 := wb_rf_wr_data"));
+                    op1 := wb_rf_wr_data;
+                elsif (ex_d.insn_type = OP_BRANCH or
+                       ex_d.insn_type = OP_JAL or
+                       ex_d.insn_type = OP_JALR or
+                       ex_d.insn_type = OP_AUIPC) then
+                    write(l, string'("op1 := id_ex_pc"));
+                    op1 := id_ex_pc;
+                else
+                    write(l, string'("op1 := id_ex_op1"));
+                    op1 := id_ex_op1;
+                end if;
+                writeline(output, l);
+
+                if (id_ex_rs2_addr = ex_mem_rd_addr and ex_mem_insn_type = OP_LOAD) then
+                    write(l, string'("op2 := mem_lmd"));
+                    op2 := mem_lmd;
+                elsif (id_ex_rs2_addr = mem_wb_rd_addr and mem_wb_insn_type = OP_LOAD) then
+                    write(l, string'("op2 := wb_rf_wr_data"));
+                    op2 := wb_rf_wr_data;
+                elsif ((id_ex_insn_type = OP_ALU and id_ex_use_imm = '1') or
+                       id_ex_insn_type = OP_BRANCH or
+                       id_ex_insn_type = OP_JAL or
+                       id_ex_insn_type = OP_JALR or
+                       id_ex_insn_type = OP_LOAD or
+                       id_ex_insn_type = OP_STORE or
+                       id_ex_insn_type = OP_AUIPC) then
+                    write(l, string'("op2 := id_ex_imm"));
+                    op1 := id_ex_imm;
+                else
+                    write(l, string'("op2 := id_ex_op2"));
+                    op2 := id_ex_op2;
+                end if;
+                writeline(output, l);
+
+                write(l, string'(" Op1: "));
+                write(l, hstr(op1));
+                write(l, string'(", Op2: "));
+                write(l, hstr(op2));
+                writeline(output, l);
+            end if;
 
             if id_ex_taken = '1' then
                 write(l, string'("Predicting branch as taken, redirecting PC to "));
@@ -391,10 +460,14 @@ begin  -- architecture Behavioral
 
     -- inputs (includes multiplexers for ALU operands from the LMD "Load Memory
     -- Data" datapath)
-    ex_d.insn_type   <= id_ex_insn_type;
-    ex_d.npc         <= id_ex_pc;
-    ex_d.rs1         <= mem_lmd when (id_ex_rs1_addr = ex_mem_rd_addr and ex_mem_insn_type = OP_LOAD) else id_ex_op1;
-    ex_d.rs2         <= mem_lmd when (id_ex_rs2_addr = ex_mem_rd_addr and ex_mem_insn_type = OP_LOAD) else id_ex_op2;
+    ex_d.insn_type <= id_ex_insn_type;
+    ex_d.npc       <= id_ex_pc;
+    ex_d.op1       <= mem_lmd when (id_ex_rs1_addr = ex_mem_rd_addr and ex_mem_insn_type = OP_LOAD)
+                      else wb_rf_wr_data when (id_ex_rs1_addr = mem_wb_rd_addr and mem_wb_insn_type = OP_LOAD)
+                      else id_ex_op1;
+    ex_d.op2 <= mem_lmd when (id_ex_rs2_addr = ex_mem_rd_addr and ex_mem_insn_type = OP_LOAD)
+                else wb_rf_wr_data when (id_ex_rs2_addr = mem_wb_rd_addr and mem_wb_insn_type = OP_LOAD)
+                else id_ex_op2;
     ex_d.use_imm     <= id_ex_use_imm;
     ex_d.alu_func    <= id_ex_alu_func;
     ex_d.branch_type <= id_ex_branch_type;
@@ -418,6 +491,8 @@ begin  -- architecture Behavioral
                   tick    => ex_csr_timer_tick,
                   instret => ex_csr_instret,
                   value   => ex_mem_csr_value);
+
+    debug_alu_result <= ex_q.alu_result;
 
     -- multiplexer for Register File write data
     ex_rf_data <= ex_q.return_addr when (id_ex_insn_type = OP_JAL or id_ex_insn_type = OP_JALR) else
@@ -510,6 +585,7 @@ begin  -- architecture Behavioral
         data_in     when others;
 
     mem_rf_data_mux <= ex_mem_csr_value when ex_mem_is_csr = '1'
+                       else mem_lmd when ex_mem_insn_type = OP_LOAD
                        else ex_mem_rf_data;
 
     ---------------------------------------------------
@@ -530,12 +606,14 @@ begin  -- architecture Behavioral
                 mem_wb_rf_we     <= ex_mem_rf_we;
                 mem_wb_insn_type <= ex_mem_insn_type;
                 mem_wb_rf_data   <= mem_rf_data_mux;
+                mem_wb_is_csr    <= ex_mem_is_csr;
 
                 if (data_in_valid = '1') then
                     mem_wb_lmd <= mem_lmd;
                 end if;
             else
-                mem_wb_rf_we <= '0';
+                mem_wb_rf_we  <= '0';
+                mem_wb_is_csr <= '0';
             end if;
         end if;
     end process mem_wb_regs;
@@ -545,7 +623,7 @@ begin  -- architecture Behavioral
     ---------------------------------------------------
     wb_rf_wr_addr <= mem_wb_rd_addr;
     wb_rf_wr_en   <= mem_wb_rf_we;
-    wb_rf_wr_data <= mem_wb_lmd when (mem_wb_insn_type = OP_LOAD) else mem_wb_rf_data;
+    wb_rf_wr_data <= mem_wb_rf_data;
 
     ---------------------------------------------------
     -- print register file writebacks

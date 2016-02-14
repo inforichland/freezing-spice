@@ -10,8 +10,8 @@ package ex_pkg is
     type ex_in is record
         insn_type : insn_type_t;
         npc : word;
-        rs1 : word;
-        rs2 : word;
+        op1 : word;
+        op2 : word;
         use_imm : std_logic;
         alu_func : alu_func_t;
         branch_type : branch_type_t;
