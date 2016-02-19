@@ -5,7 +5,7 @@
 -- File       : pipeline.vhd
 -- Author     :   Tim Wawrzynczak
 -- Created    : 2015-07-07
--- Last update: 2016-02-14
+-- Last update: 2016-02-18
 -- Platform   : FPGA
 -- Standard   : VHDL'93/02
 -------------------------------------------------------------------------------
@@ -173,6 +173,9 @@ architecture Behavioral of pipeline is
     signal full_stall   : std_logic;
     signal hazard_stall : std_logic;
 
+    -------------------------------------------------
+    -- Simulation-specific signals
+    -------------------------------------------------
     file regout_file : text open write_mode is g_regout_filename;
 
     -- debug signals because VCD files can't contain information from VHDL records
@@ -210,10 +213,20 @@ begin  -- architecture Behavioral
                               or (ex_mem_is_csr = '1' and ex_mem_rd_addr = id_q.rs2 and id_q.rs2 /= "00000" and ex_mem_rf_we = '1')
                               or (mem_wb_is_csr = '1' and mem_wb_rd_addr = id_q.rs2 and id_q.rs2 /= "00000" and mem_wb_rf_we = '1'))
                     else '0';
-    
+
+    -- stall when a PC redirection is imminent
     branch_stall <= '1' when (id_ex_insn_type = OP_JAL or id_ex_insn_type = OP_JALR or
-                              (id_ex_insn_type = OP_BRANCH and ex_q.compare_result = '1')) else '0';
-    full_stall <= '1' when (ex_mem_insn_type = OP_LOAD and data_in_valid = '0') else '0';  -- and
+                              (id_ex_insn_type = OP_BRANCH and ex_q.compare_result = '1'))
+                    else '0';
+
+    -- stall on data not being available (data cache misses in the future)
+    full_stall <= '1' when (ex_mem_insn_type = OP_LOAD and data_in_valid = '0')
+                  else '0';
+
+-- to accomplish the below, you also need to ensure that any instruction that
+-- could bypass over the LOAD instruction has no dependencies and that too many
+-- instructions aren't issued so that the LOAD is lost.
+--                  ((ex_mem_insn_type = OP_LOAD and data_in_valid = '0') and
 --                            ((id_q.rs1 = ex_mem_rd_addr and id_q.rs1_rd = '1') or
 --                             (id_q.rs2 = ex_mem_rd_addr and id_q.rs2_rd = '1'))) else '0';
 
@@ -271,6 +284,7 @@ begin  -- architecture Behavioral
     id_stage : entity work.instruction_decoder(Behavioral)
         port map (if_id_ir, id_q);
 
+    -- debug b/c VCD files can't contain signals from VHDL records
     debug_rs1 <= id_q.rs1;
     debug_rs2 <= id_q.rs2;
 
@@ -477,7 +491,7 @@ begin  -- architecture Behavioral
     ex_stage : entity work.instruction_executor(Behavioral)
         port map (ex_d, ex_q);
 
-    -- inputs
+    -- inputs to CSRs
     ex_csr_cycle_valid <= '1' when rst_n = '1' else '0';
     ex_csr_timer_tick  <= '0';          -- TODO: implement
     ex_csr_instret     <= mem_we or wb_rf_wr_en;
@@ -492,6 +506,7 @@ begin  -- architecture Behavioral
                   instret => ex_csr_instret,
                   value   => ex_mem_csr_value);
 
+    -- simulation-specific signal
     debug_alu_result <= ex_q.alu_result;
 
     -- multiplexer for Register File write data
@@ -503,7 +518,7 @@ begin  -- architecture Behavioral
     ex_load_pc <= '1' when (id_ex_taken = '0' and (id_ex_insn_type = OP_JAL or id_ex_insn_type = OP_JALR or
                                                    (id_ex_insn_type = OP_BRANCH and ex_q.compare_result = '1'))) else '0';
 
-    -- check for misprediction.
+    -- check for misprediction
     ex_branch_mispredict <= '1' when (id_ex_insn_type = OP_BRANCH and ex_q.compare_result = '0' and id_ex_taken = '1') else '0';
 
     -- multiplexer for data memory address
@@ -584,6 +599,7 @@ begin  -- architecture Behavioral
         mem_lmd_lb  when LB,
         data_in     when others;
 
+    -- mux for register-file writeback data
     mem_rf_data_mux <= ex_mem_csr_value when ex_mem_is_csr = '1'
                        else mem_lmd when ex_mem_insn_type = OP_LOAD
                        else ex_mem_rf_data;
