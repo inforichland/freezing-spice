@@ -5,7 +5,7 @@
 -- File       : pipeline.vhd
 -- Author     :   Tim Wawrzynczak
 -- Created    : 2015-07-07
--- Last update: 2016-02-18
+-- Last update: 2016-04-07
 -- Platform   : FPGA
 -- Standard   : VHDL'93/02
 -------------------------------------------------------------------------------
@@ -28,6 +28,7 @@ use work.common.all;
 use work.if_pkg.all;
 use work.id_pkg.all;
 use work.ex_pkg.all;
+use work.csr_pkg.all;
 
 entity pipeline is
     generic (g_initial_pc      : unsigned(31 downto 0) := (others => '0');

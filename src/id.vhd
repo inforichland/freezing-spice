@@ -3,6 +3,7 @@ use ieee.std_logic_1164.all;
 
 use work.common.all;
 use work.id_pkg.all;
+use work.csr_pkg.all;
 
 entity instruction_decoder is
     port (d : in  word;

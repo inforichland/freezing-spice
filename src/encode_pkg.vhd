@@ -4,6 +4,7 @@ use ieee.numeric_std.all;
 
 use work.common.all;
 use work.id_pkg.all;
+use work.csr_pkg.all;
 
 package encode_pkg is
 

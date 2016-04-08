@@ -3,6 +3,7 @@ use ieee.std_logic_1164.all;
 use std.textio.all;
 
 use work.common.all;
+use work.csr_pkg.all;
 
 package id_pkg is
     type id_in is record

@@ -2,6 +2,7 @@ library ieee;
 use ieee.std_logic_1164.all;
 use work.encode_pkg.all;
 use work.common.all;
+use work.csr_pkg.all;
 
 package test_config is
 

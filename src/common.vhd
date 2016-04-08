@@ -58,14 +58,6 @@ package common is
     constant SH         : store_type_t := "10";
     constant SW         : store_type_t := "11";
 
-    subtype csr_addr_t is std_logic_vector(2 downto 0);
-    constant CSR_CYCLE    : csr_addr_t := "000";
-    constant CSR_CYCLEH   : csr_addr_t := "001";
-    constant CSR_TIME     : csr_addr_t := "010";
-    constant CSR_TIMEH    : csr_addr_t := "011";
-    constant CSR_INSTRET  : csr_addr_t := "100";
-    constant CSR_INSTRETH : csr_addr_t := "101";
-
     -- print a string with a newline
     procedure println (str : in    string);
     procedure print (slv   : in    std_logic_vector);

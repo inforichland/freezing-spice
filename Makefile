@@ -4,7 +4,7 @@ GHDLRUNFLAGS=
 
 # Correct order is crucial to avoid ghdl error
 SRC_PATH = src/
-SRC = $(addprefix $(SRC_PATH), std_logic_textio.vhd common.vhd id_pkg.vhd encode_pkg.vhd alu.vhd compare_unit.vhd ex_pkg.vhd ex.vhd id.vhd if_pkg.vhd if.vhd regfile.vhd csr.vhd pipeline.vhd dpram.vhd)
+SRC = $(addprefix $(SRC_PATH), csr_pkg.vhd std_logic_textio.vhd common.vhd id_pkg.vhd encode_pkg.vhd alu.vhd compare_unit.vhd ex_pkg.vhd ex.vhd id.vhd if_pkg.vhd if.vhd regfile.vhd csr.vhd pipeline.vhd dpram.vhd)
 
 # 
 PIPELINE_TB=tests/pipeline_tb.vhd
@@ -65,7 +65,7 @@ test3: sim/test3.vec tests/test_config3.vhd input_vectors
 # generation of test vectors
 .PHONY: $(TEST_VECTORS)
 $(TEST_VECTORS):
-	$(GHDL) -a $(GHDLFLAGS) 	src/common.vhd src/id_pkg.vhd src/encode_pkg.vhd $@.vhd tests/generate_ramfile.vhd
+	$(GHDL) -a $(GHDLFLAGS) 	src/csr_pkg.vhd src/common.vhd src/id_pkg.vhd src/encode_pkg.vhd $@.vhd tests/generate_ramfile.vhd
 	$(GHDL) -e $(GHDLFLAGS) 	generate_ramfile
 	$(GHDL) -r $(GHDLRUNFLAGS) 	generate_ramfile
 .PHONY: input_vectors
