@@ -5,7 +5,7 @@
 -- File       : pipeline.vhd
 -- Author     :   Tim Wawrzynczak
 -- Created    : 2015-07-07
--- Last update: 2016-04-07
+-- Last update: 2017-01-15
 -- Platform   : FPGA
 -- Standard   : VHDL'93/02
 -------------------------------------------------------------------------------
@@ -16,7 +16,21 @@
 --   Memory Access
 --   Register File Writeback
 -------------------------------------------------------------------------------
--- Copyright (c) 2015 
+-- Interrupts: 32-bit wide IRQ number
+--   Currently when an instruction signals that an interrupt
+--   needs to be taken, a "trap instruction" is immediately inserted into
+--   the pipeline.  Once the trap instruction reaches the writeback stage,
+--   all instructions in the pipeline are flushed, and the IF stage steers
+--   the pipeline to the IRQ_VECTOR_ADDRESS.  The pipeline will have inserted
+--   the IRQ number into the "MCAUSE" CSR.  The ISR can read that register
+--   to determine the cause of the interrupt and can decide what to do with
+--   that information.
+--
+--   Only one interrupt can be serviced at a time, due to this architectural
+--   choice; the 'irq' and 'irq_ack' I/O ports are used to handshake with
+--   an external interrupt controller.
+-------------------------------------------------------------------------------
+-- Copyright (c) 2017 Tim Wawrzynczak
 -------------------------------------------------------------------------------
 
 library ieee;
@@ -36,6 +50,11 @@ entity pipeline is
              g_regout_filename : string                := "sim/regout.vec");
     port (clk   : in std_logic;
           rst_n : in std_logic;
+
+          -- interrupt interface
+          irq_num : in  word;
+          irq     : in  std_logic;
+          irq_ack : out std_logic;
 
           -- Instruction interface
           insn_in    : in  word;
@@ -175,6 +194,13 @@ architecture Behavioral of pipeline is
     signal hazard_stall : std_logic;
 
     -------------------------------------------------
+    -- Interrupt signals
+    -------------------------------------------------
+    signal in_irq           : std_logic := '0';
+    signal trap_in_pipeline : std_logic := '0';
+    signal if_take_irq      : std_logic := '0';
+
+    -------------------------------------------------
     -- Simulation-specific signals
     -------------------------------------------------
     file regout_file : text open write_mode is g_regout_filename;
@@ -203,7 +229,7 @@ begin  -- architecture Behavioral
     -------------------------------------------------
     if_kill  <= ex_mem_load_pc or (not insn_valid) or id_predict_taken or ex_branch_mispredict;
     if_stall <= ex_mem_load_pc or branch_stall or full_stall or hazard_stall;
-    id_kill  <= ex_mem_load_pc or id_predict_taken or ex_branch_mispredict;
+    id_kill  <= (ex_mem_load_pc or ex_branch_mispredict) and not id_predict_taken;
     id_stall <= branch_stall or full_stall or hazard_stall;
 
     -- being lazy and stalling on reads of CSR writes
@@ -224,13 +250,6 @@ begin  -- architecture Behavioral
     full_stall <= '1' when (ex_mem_insn_type = OP_LOAD and data_in_valid = '0')
                   else '0';
 
--- to accomplish the below, you also need to ensure that any instruction that
--- could bypass over the LOAD instruction has no dependencies and that too many
--- instructions aren't issued so that the LOAD is lost.
---                  ((ex_mem_insn_type = OP_LOAD and data_in_valid = '0') and
---                            ((id_q.rs1 = ex_mem_rd_addr and id_q.rs1_rd = '1') or
---                             (id_q.rs2 = ex_mem_rd_addr and id_q.rs2_rd = '1'))) else '0';
-
     ---------------------------------------------------
     -- Instruction fetch
     ---------------------------------------------------
@@ -239,6 +258,7 @@ begin  -- architecture Behavioral
     if_d.stall   <= if_stall;
     if_d.load_pc <= ex_mem_load_pc or id_predict_taken or ex_branch_mispredict;
     if_d.next_pc <= ex_mem_next_pc when (ex_mem_load_pc = '1') else id_branch_pc;
+    if_d.irq     <= if_take_irq;
 
     -- instantiation
     if_stage : entity work.instruction_fetch(Behavioral)
@@ -286,8 +306,10 @@ begin  -- architecture Behavioral
         port map (if_id_ir, id_q);
 
     -- debug b/c VCD files can't contain signals from VHDL records
-    debug_rs1 <= id_q.rs1;
-    debug_rs2 <= id_q.rs2;
+    gen_debug1 : if g_for_sim = true generate
+        debug_rs1 <= id_q.rs1;
+        debug_rs2 <= id_q.rs2;
+    end generate gen_debug1;
 
     -- forwarding to ALU input multiplexer
     id_op1 <= ex_q.alu_result when (id_q.rs1 = id_ex_rd_addr and id_q.rs1 /= "00000" and id_kill = '0') else
@@ -302,7 +324,7 @@ begin  -- architecture Behavioral
               rs2_data;
 
     -- branch prediction: for now, predict backward branches as TAKEN
-    --   and forward as NOT TAKEN
+    --   and forward as NOT TAKEN (optimized for loops)
     id_predict_taken <= '1' when (id_q.imm(31) = '1' and (id_q.insn_type = OP_BRANCH or id_q.insn_type = OP_JAL or id_q.insn_type = OP_JALR))
                         else '0';
 
@@ -337,8 +359,8 @@ begin  -- architecture Behavioral
                 id_ex_op2      <= id_op2;
                 id_ex_use_imm  <= id_q.use_imm;
 
-                -- don't kill the branch instruction!
-                if (id_kill = '1' and id_predict_taken = '0') then
+                -- to kill an instruction
+                if (id_kill = '1') then
                     id_ex_ir          <= NOP;
                     id_ex_rd_addr     <= (others => '0');
                     id_ex_insn_type   <= OP_STALL;
@@ -508,7 +530,9 @@ begin  -- architecture Behavioral
                   value   => ex_mem_csr_value);
 
     -- simulation-specific signal
-    debug_alu_result <= ex_q.alu_result;
+    gen_debug2 : if g_for_sim = true generate
+        debug_alu_result <= ex_q.alu_result;
+    end generate gen_debug2;
 
     -- multiplexer for Register File write data
     ex_rf_data <= ex_q.return_addr when (id_ex_insn_type = OP_JAL or id_ex_insn_type = OP_JALR) else
@@ -532,7 +556,7 @@ begin  -- architecture Behavioral
     -- purpose: Pipeline data between EX and MEM stages
     ex_mem_regs_proc : process (clk, rst_n) is
     begin  -- process ex_mem_regs_proc
-        if (rst_n = '0') then           -- asynchronous reset (active low)
+        if (rst_n = '0') then                         -- asynchronous reset (active low)
             ex_mem_load_pc     <= '0';
             ex_mem_next_pc     <= (others => '0');
             ex_mem_rf_data     <= (others => '0');

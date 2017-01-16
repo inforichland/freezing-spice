@@ -15,7 +15,7 @@ architecture behavioral of instruction_decoder is
     -- Types
     -------------------------------------------------
     
-    type imm_type_t is (IMM_NONE, IMM_I, IMM_S, IMM_B, IMM_U, IMM_J);
+    type imm_type_t is (IMM_NONE, IMM_I, IMM_S, IMM_B, IMM_U, IMM_J, IMM_Z);
 
     -------------------------------------------------
     -- Signals
@@ -56,12 +56,12 @@ begin  -- architecture behavioral
         decoded.insn_type   <= OP_ILLEGAL;
         decoded.load_type   <= LOAD_NONE;
         decoded.store_type  <= STORE_NONE;
-        decoded.imm         <= (others => '0');
+        decoded.imm         <= (others => 'X');
         decoded.use_imm     <= '0';
         decoded.branch_type <= BRANCH_NONE;
         decoded.rf_we       <= '0';
         decoded.is_csr      <= '0';
-        decoded.csr_addr    <= (others => '0');
+        decoded.csr_addr    <= (others => 'X');
 
         case (opcode) is
             -- Load Upper Immediate
@@ -215,37 +215,50 @@ begin  -- architecture behavioral
             -- system functions
             when c_op_system =>
                 decoded.insn_type <= OP_SYSTEM;
+                decoded.csr_addr  <= insn(31 downto 20);
 
                 case (funct3) is
-                    when "010" =>                             -- CSR
-                        if insn(19 downto 15) = "00000" then  -- rs1 = 0
-                            decoded.is_csr <= '1';
-                            decoded.rf_we <= '1';
-                            
-                            case insn(31 downto 20) is
-                                when "110000000000" => decoded.csr_addr <= CSR_CYCLE;
-                                when "110010000000" => decoded.csr_addr <= CSR_CYCLEH;
-                                when "110000000001" => decoded.csr_addr <= CSR_TIME;
-                                when "110010000001" => decoded.csr_addr <= CSR_TIMEH;
-                                when "110000000010" => decoded.csr_addr <= CSR_INSTRET;
-                                when "110010000010" => decoded.csr_addr <= CSR_INSTRETH;
-                                when others         => null;
-                            end case;
+                    when "000" =>
+                        if insn(20) = '0' then
+                            decoded.system_type <= SYSTEM_ECALL;
                         else
-                            decoded.insn_type <= OP_ILLEGAL;
+                            decoded.system_type <= SYSTEM_EBREAK;
                         end if;
-                        
-                    when others => null;
+                    when "001" =>
+                        decoded.system_type <= SYSTEM_CSRRW;
+                        decoded.rf_we       <= '1';
+                        decoded.rs1_rd      <= '1';
+                    when "010" =>
+                        decoded.system_type <= SYSTEM_CSRRS;
+                        decoded.rf_we       <= '1';
+                        decoded.rs1_rd      <= '1';
+                    when "011" =>
+                        decoded.system_type <= SYSTEM_CSRRC;
+                        decoded.rf_we       <= '1';
+                        decoded.rs1_rd      <= '1';
+                    when "101" =>
+                        decoded.system_type <= SYSTEM_CSRRWI;
+                        decoded.rf_we       <= '1';
+                        decoded.use_imm     <= '1';
+                    when "110" =>
+                        decoded.system_type <= SYSTEM_CSRRSI;
+                        decoded.rf_we       <= '1';
+                        decoded.use_imm     <= '1';
+                    when "111" =>
+                        decoded.system_type <= SYSTEM_CSRRC;
+                        decoded.rf_we       <= '1';
+                        decoded.use_imm     <= '1';
+                    when others =>
+                        decoded.insn_type <= OP_ILLEGAL;
                 end case;
 
-                -- @TODO other insnructions
-                --when c_op_misc_mem =>
-                --    insn_type <= OP_FENCE;
-                
             when others =>
                 decoded.insn_type <= OP_ILLEGAL;
-                
         end case;
+
+        -- @TODO other insnructions
+        --when c_op_misc_mem =>
+        --    insn_type <= OP_FENCE;
 
         -- decode and sign-extend the immediate value
         case imm_type is
@@ -290,8 +303,14 @@ begin  -- architecture behavioral
                 decoded.imm(10 downto 5)  <= insn(30 downto 25);
                 decoded.imm(4 downto 1)   <= insn(24 downto 21);
                 decoded.imm(0)            <= '0';
+
+            when IMM_Z =>
+                for i in 31 downto 5 loop
+                    decoded.imm(i) <= insn(4);
+                end loop;  -- i
+                decoded.imm(4 downto 0) <= insn(4 downto 0);
                 
-            when others => decoded.imm <= (others => '0');
+            when others => decoded.imm <= (others => 'X');
         end case;
         
     end process decode_proc;

@@ -6,6 +6,7 @@ use std.textio.all;
 package common is
     -- definition for a machine word
     subtype word is std_logic_vector(31 downto 0);
+    subtype reg_addr_t is std_logic_vector(4 downto 0);
 
     subtype alu_func_t is std_logic_vector(3 downto 0);
     constant ALU_NONE : alu_func_t := "0000";
@@ -57,6 +58,16 @@ package common is
     constant SB         : store_type_t := "01";
     constant SH         : store_type_t := "10";
     constant SW         : store_type_t := "11";
+
+    subtype system_type_t is std_logic_vector(2 downto 0);
+    constant SYSTEM_ECALL  : system_type_t := "000";
+    constant SYSTEM_EBREAK : system_type_t := "001";
+    constant SYSTEM_CSRRW  : system_type_t := "010";
+    constant SYSTEM_CSRRS  : system_type_t := "011";
+    constant SYSTEM_CSRRC  : system_type_t := "100";
+    constant SYSTEM_CSRRWI : system_type_t := "101";
+    constant SYSTEM_CSRRSI : system_type_t := "110";
+    constant SYSTEM_CSRRCI : system_type_t := "111";
 
     -- print a string with a newline
     procedure println (str : in    string);

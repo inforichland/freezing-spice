@@ -54,6 +54,8 @@ begin  -- architecture Behavioral
 
         if (zero = '1') then
             v.pc := (others => '0');
+        elsif (d.irq = '1') then
+            v.pc := IRQ_VECTOR_ADDRESS;
         elsif (d.load_pc = '1') then
             v.pc := unsigned(d.next_pc);
         elsif (d.stall = '1') then

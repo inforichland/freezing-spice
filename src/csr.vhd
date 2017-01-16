@@ -7,13 +7,9 @@ use work.id_pkg.all;
 use work.csr_pkg.all;
 
 entity csr is
-    port (clk     : in  std_logic;
-          en      : in  std_logic;
-          addr    : in  csr_addr_t;
-          valid   : in  std_logic;  -- '1' if this was a valid cycle that the core was executing
-          tick    : in  std_logic;  -- '1' will increment the TIME (& TIMEH) register
-          instret : in  std_logic;  -- '1' for instruction retired this cycle
-          value   : out word);
+    port (clk    : in  std_logic;
+          csr_in : in  csr_in_t;
+          value  : out word);
 end entity csr;
 
 architecture behavioral of csr is

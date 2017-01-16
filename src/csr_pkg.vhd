@@ -2,10 +2,23 @@ library ieee;
 use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
 
+use work.common.all;
+
 package csr_pkg is
 
     subtype csr_addr_t is std_logic_vector(11 downto 0);
 
+    -- input record
+    type csr_in_t is record
+        csr_addr    : csr_addr_t;
+        rs1         : word;
+        imm         : word;
+        system_type : system_type_t;
+        valid  :  std_logic;  -- '1' if this was a valid cycle that the core was executing
+        instret : in  std_logic;  -- '1' for instruction retired this cycle
+
+    end record csr_in_t;
+    
     ----------------------------------------------
     -- User-mode (U) CSRs
     ----------------------------------------------

@@ -6,10 +6,14 @@ use work.common.all;
 use work.csr_pkg.all;
 
 package id_pkg is
+    -- decoder input
     type id_in is record
         instruction : word;
     end record id_in;
 
+    -- opcode type
+    subtype opcode_t is std_logic_vector(6 downto 0);
+    
     -- structure for decoded instruction    
     type decoded_t is record
         alu_func    : alu_func_t;
@@ -18,19 +22,19 @@ package id_pkg is
         branch_type : branch_type_t;
         load_type   : load_type_t;
         store_type  : store_type_t;
-        rs1         : std_logic_vector(4 downto 0);
-        rs2         : std_logic_vector(4 downto 0);
-        rd          : std_logic_vector(4 downto 0);
+        rs1         : reg_addr_t;
+        rs2         : reg_addr_t;
+        rd          : reg_addr_t;
         imm         : word;
-        opcode      : std_logic_vector(6 downto 0);
+        opcode      : opcode_t;
         rs1_rd      : std_logic;
         rs2_rd      : std_logic;
         use_imm     : std_logic;
         rf_we       : std_logic;
-        is_csr      : std_logic;
         csr_addr    : csr_addr_t;
+        system_type : system_type_t;
     end record decoded_t;
-
+    
     -- value of decoding after reset
     constant c_decoded_reset : decoded_t := (alu_func    => ALU_NONE,
                                              op2_src     => '0',
@@ -42,26 +46,26 @@ package id_pkg is
                                              rs2         => "00000",
                                              rd          => "00000",
                                              imm         => (others => '0'),
-                                             opcode      => (others => 'X'),
+                                             opcode      => (others => '0'),
                                              rs1_rd      => '0',
                                              rs2_rd      => '0',
                                              use_imm     => '0',
                                              rf_we       => '0',
                                              csr_addr    => (others => '0'),
-                                             is_csr      => '0');
+                                             system_type => SYSTEM_ECALL);
 
     -- Constants
-    constant c_op_load     : std_logic_vector(6 downto 0) := "0000011";
-    constant c_op_misc_mem : std_logic_vector(6 downto 0) := "0001111";
-    constant c_op_imm      : std_logic_vector(6 downto 0) := "0010011";
-    constant c_op_auipc    : std_logic_vector(6 downto 0) := "0010111";
-    constant c_op_store    : std_logic_vector(6 downto 0) := "0100011";
-    constant c_op_reg      : std_logic_vector(6 downto 0) := "0110011";
-    constant c_op_lui      : std_logic_vector(6 downto 0) := "0110111";
-    constant c_op_branch   : std_logic_vector(6 downto 0) := "1100011";
-    constant c_op_jalr     : std_logic_vector(6 downto 0) := "1100111";
-    constant c_op_jal      : std_logic_vector(6 downto 0) := "1101111";
-    constant c_op_system   : std_logic_vector(6 downto 0) := "1110011";
+    constant c_op_load     : opcode_t := "0000011";
+    constant c_op_misc_mem : opcode_t := "0001111";
+    constant c_op_imm      : opcode_t := "0010011";
+    constant c_op_auipc    : opcode_t := "0010111";
+    constant c_op_store    : opcode_t := "0100011";
+    constant c_op_reg      : opcode_t := "0110011";
+    constant c_op_lui      : opcode_t := "0110111";
+    constant c_op_branch   : opcode_t := "1100011";
+    constant c_op_jalr     : opcode_t := "1100111";
+    constant c_op_jal      : opcode_t := "1101111";
+    constant c_op_system   : opcode_t := "1110011";
 
     procedure print_insn (insn_type : in insn_type_t);
     
