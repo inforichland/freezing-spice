@@ -15,7 +15,7 @@ package csr_pkg is
         imm         : word;
         system_type : system_type_t;
         valid  :  std_logic;  -- '1' if this was a valid cycle that the core was executing
-        instret : in  std_logic;  -- '1' for instruction retired this cycle
+        instret : std_logic;  -- '1' for instruction retired this cycle
 
     end record csr_in_t;
     
